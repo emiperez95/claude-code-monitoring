@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Events Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="dashboard()" x-init="init()" class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Claude Events Dashboard</h1>
+            <p class="text-gray-600">Real-time monitoring of Claude Code subagent invocations</p>
+        </div>
+        
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-gray-600 text-sm font-medium uppercase tracking-wider">Total Events</h2>
+                        <p class="text-3xl font-bold text-gray-900 mt-2" x-text="summary.total_events || '0'">-</p>
+                    </div>
+                    <div class="text-blue-500">
+                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-gray-600 text-sm font-medium uppercase tracking-wider">Unique Sessions</h2>
+                        <p class="text-3xl font-bold text-gray-900 mt-2" x-text="summary.unique_sessions || '0'">-</p>
+                    </div>
+                    <div class="text-green-500">
+                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-gray-600 text-sm font-medium uppercase tracking-wider">Unique Agents</h2>
+                        <p class="text-3xl font-bold text-gray-900 mt-2" x-text="summary.unique_agents || '0'">-</p>
+                    </div>
+                    <div class="text-purple-500">
+                        <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Subagent Performance Table -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Subagent Performance</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-3 px-2 font-medium text-gray-700">Subagent</th>
+                                <th class="text-right py-3 px-2 font-medium text-gray-700">Count</th>
+                                <th class="text-right py-3 px-2 font-medium text-gray-700">Avg (ms)</th>
+                                <th class="text-right py-3 px-2 font-medium text-gray-700">Tokens</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="agent in subagents" :key="agent.subagent_type">
+                                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                    <td class="py-3 px-2 font-medium text-gray-900" x-text="agent.subagent_type || 'N/A'"></td>
+                                    <td class="text-right py-3 px-2 text-gray-700" x-text="agent.invocations"></td>
+                                    <td class="text-right py-3 px-2 text-gray-700" x-text="agent.avg_duration_ms ? agent.avg_duration_ms.toLocaleString() : '-'"></td>
+                                    <td class="text-right py-3 px-2 text-gray-700" x-text="agent.total_tokens ? agent.total_tokens.toLocaleString() : '-'"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="subagents.length === 0">
+                                <td colspan="4" class="text-center py-4 text-gray-500">No subagent data available</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Recent Sessions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Recent Sessions</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-3 px-2 font-medium text-gray-700">Session</th>
+                                <th class="text-right py-3 px-2 font-medium text-gray-700">Events</th>
+                                <th class="text-right py-3 px-2 font-medium text-gray-700">Agents</th>
+                                <th class="text-right py-3 px-2 font-medium text-gray-700">Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="session in sessions" :key="session.session_id">
+                                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                    <td class="py-3 px-2">
+                                        <div class="font-mono text-xs text-gray-600" x-text="session.session_id?.substring(0, 8) + '...'"></div>
+                                        <div class="text-xs text-gray-500" x-text="formatTime(session.session_start)"></div>
+                                    </td>
+                                    <td class="text-right py-3 px-2 text-gray-700" x-text="session.event_count"></td>
+                                    <td class="text-right py-3 px-2 text-gray-700" x-text="session.unique_agents"></td>
+                                    <td class="text-right py-3 px-2 text-gray-700" x-text="formatDuration(session.duration_seconds)"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="sessions.length === 0">
+                                <td colspan="4" class="text-center py-4 text-gray-500">No session data available</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Events -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Recent Events</h2>
+                <button @click="loadRecentEvents()" class="text-sm text-blue-600 hover:text-blue-800">
+                    Refresh
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="text-left py-3 px-2 font-medium text-gray-700">Timestamp</th>
+                            <th class="text-left py-3 px-2 font-medium text-gray-700">Event</th>
+                            <th class="text-left py-3 px-2 font-medium text-gray-700">Subagent</th>
+                            <th class="text-left py-3 px-2 font-medium text-gray-700">Description</th>
+                            <th class="text-right py-3 px-2 font-medium text-gray-700">Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="event in recentEvents" :key="event.timestamp + event.event_type">
+                            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                <td class="py-3 px-2 text-gray-700" x-text="formatTime(event.timestamp)"></td>
+                                <td class="py-3 px-2">
+                                    <span class="px-2 py-1 text-xs rounded-full"
+                                          :class="{
+                                              'bg-blue-100 text-blue-800': event.event_type === 'pre',
+                                              'bg-green-100 text-green-800': event.event_type === 'post',
+                                              'bg-gray-100 text-gray-800': event.event_type === 'stop'
+                                          }"
+                                          x-text="event.event_type"></span>
+                                </td>
+                                <td class="py-3 px-2 text-gray-700">
+                                    <span class="font-medium" x-text="event.subagent_type || '-'"></span>
+                                </td>
+                                <td class="py-3 px-2 text-gray-700 max-w-xs truncate" :title="event.description" x-text="event.description || '-'"></td>
+                                <td class="text-right py-3 px-2 text-gray-700" x-text="event.duration_ms ? event.duration_ms.toLocaleString() + 'ms' : '-'"></td>
+                            </tr>
+                        </template>
+                        <tr x-show="recentEvents.length === 0">
+                            <td colspan="5" class="text-center py-4 text-gray-500">No events available</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Auto-refresh indicator -->
+        <div class="mt-4 text-center text-sm text-gray-500">
+            <span x-show="autoRefresh">Auto-refresh enabled (30s)</span>
+            <span x-show="!autoRefresh">Auto-refresh disabled</span>
+            <button @click="autoRefresh = !autoRefresh" class="ml-2 text-blue-600 hover:text-blue-800">
+                Toggle
+            </button>
+        </div>
+    </div>
+    
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
