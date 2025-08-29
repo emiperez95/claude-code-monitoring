@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sessions - Claude Events</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="sessionsPage()" x-init="init()" class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">All Sessions</h1>
+                <p class="text-gray-600">Browse and analyze all Claude Code sessions</p>
+            </div>
+            <nav class="flex gap-4">
+                <a href="/" class="text-blue-600 hover:text-blue-800 font-medium">Dashboard</a>
+                <a href="/sessions" class="text-blue-600 hover:text-blue-800 font-medium">Sessions</a>
+                <a href="/subagents" class="text-blue-600 hover:text-blue-800 font-medium">Subagents</a>
+            </nav>
+        </div>
+        
+        <!-- Stats Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-2xl font-bold text-gray-900" x-text="total">0</div>
+                <div class="text-sm text-gray-600">Total Sessions</div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-2xl font-bold text-gray-900" x-text="totalEvents">0</div>
+                <div class="text-sm text-gray-600">Total Events</div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-2xl font-bold text-gray-900" x-text="avgDuration">-</div>
+                <div class="text-sm text-gray-600">Avg Duration</div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <div class="text-2xl font-bold text-gray-900" x-text="totalTokens.toLocaleString()">0</div>
+                <div class="text-sm text-gray-600">Total Tokens</div>
+            </div>
+        </div>
+        
+        <!-- Sorting and Filters -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+            <div class="flex flex-wrap gap-4 items-center">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-gray-700">Sort by:</label>
+                    <select x-model="sortBy" @change="loadSessions()" class="text-sm border border-gray-300 rounded px-3 py-1">
+                        <option value="session_start">Start Time</option>
+                        <option value="event_count">Event Count</option>
+                        <option value="duration">Duration</option>
+                        <option value="unique_agents">Unique Agents</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-gray-700">Order:</label>
+                    <select x-model="order" @change="loadSessions()" class="text-sm border border-gray-300 rounded px-3 py-1">
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-gray-700">Show:</label>
+                    <select x-model="limit" @change="loadSessions()" class="text-sm border border-gray-300 rounded px-3 py-1">
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <button @click="loadSessions()" class="ml-auto text-sm text-blue-600 hover:text-blue-800">
+                    Refresh
+                </button>
+            </div>
+        </div>
+        
+        <!-- Sessions Table -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-200 bg-gray-50">
+                            <th class="text-left py-3 px-4 font-medium text-gray-700">Session ID</th>
+                            <th class="text-left py-3 px-4 font-medium text-gray-700">Start Time</th>
+                            <th class="text-right py-3 px-4 font-medium text-gray-700">Duration</th>
+                            <th class="text-right py-3 px-4 font-medium text-gray-700">Events</th>
+                            <th class="text-left py-3 px-4 font-medium text-gray-700">Agents Used</th>
+                            <th class="text-right py-3 px-4 font-medium text-gray-700">Tokens</th>
+                            <th class="text-center py-3 px-4 font-medium text-gray-700">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="session in sessions" :key="session.session_id">
+                            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                <td class="py-3 px-4">
+                                    <div class="font-mono text-sm text-blue-600 hover:text-blue-800 cursor-pointer" 
+                                         @click="window.location.href = '/session/' + session.session_id"
+                                         x-text="session.session_id?.substring(0, 12) + '...'"></div>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="text-sm text-gray-900" x-text="formatDateTime(session.session_start)"></div>
+                                    <div class="text-xs text-gray-500" x-text="formatRelativeTime(session.session_start)"></div>
+                                </td>
+                                <td class="text-right py-3 px-4 text-sm" x-text="formatDuration(session.duration_seconds)"></td>
+                                <td class="text-right py-3 px-4">
+                                    <span class="text-sm font-medium" x-text="session.event_count"></span>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex flex-wrap gap-1">
+                                        <template x-for="agent in session.agent_list.slice(0, 3)" :key="agent">
+                                            <span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded" x-text="agent || 'Unknown'"></span>
+                                        </template>
+                                        <span x-show="session.agent_list.length > 3" 
+                                              class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded"
+                                              x-text="'+' + (session.agent_list.length - 3)"></span>
+                                    </div>
+                                </td>
+                                <td class="text-right py-3 px-4 text-sm" x-text="(session.total_tokens || 0).toLocaleString()"></td>
+                                <td class="text-center py-3 px-4">
+                                    <button @click="window.location.href = '/session/' + session.session_id"
+                                            class="text-sm text-blue-600 hover:text-blue-800">
+                                        View Details →
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="sessions.length === 0">
+                            <td colspan="7" class="text-center py-8 text-gray-500">No sessions found</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        <div x-show="total > limit" class="mt-6 flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                Showing <span x-text="offset + 1"></span> to 
+                <span x-text="Math.min(offset + limit, total)"></span> of 
+                <span x-text="total"></span> sessions
+            </div>
+            <div class="flex gap-2">
+                <button @click="previousPage()" 
+                        :disabled="offset === 0"
+                        class="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Previous
+                </button>
+                <div class="flex gap-1">
+                    <template x-for="page in pageNumbers" :key="page">
+                        <button @click="goToPage(page)" 
+                                :class="{'bg-blue-600 text-white': currentPage === page, 'hover:bg-gray-50': currentPage !== page}"
+                                class="px-3 py-2 text-sm border border-gray-300 rounded"
+                                x-text="page"></button>
+                    </template>
+                </div>
+                <button @click="nextPage()" 
+                        :disabled="offset + limit >= total"
+                        class="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function sessionsPage() {
+            return {
+                sessions: [],
+                total: 0,
+                totalEvents: 0,
+                totalTokens: 0,
+                avgDuration: '-',
+                limit: 20,
+                offset: 0,
+                sortBy: 'session_start',
+                order: 'desc',
+                
+                get currentPage() {
+                    return Math.floor(this.offset / this.limit) + 1;
+                },
+                
+                get totalPages() {
+                    return Math.ceil(this.total / this.limit);
+                },
+                
+                get pageNumbers() {
+                    const pages = [];
+                    const current = this.currentPage;
+                    const total = this.totalPages;
+                    
+                    if (total <= 7) {
+                        for (let i = 1; i <= total; i++) pages.push(i);
+                    } else {
+                        if (current <= 3) {
+                            for (let i = 1; i <= 5; i++) pages.push(i);
+                            pages.push('...', total);
+                        } else if (current >= total - 2) {
+                            pages.push(1, '...');
+                            for (let i = total - 4; i <= total; i++) pages.push(i);
+                        } else {
+                            pages.push(1, '...', current - 1, current, current + 1, '...', total);
+                        }
+                    }
+                    return pages;
+                },
+                
+                async init() {
+                    await this.loadSessions();
+                },
+                
+                async loadSessions() {
+                    try {
+                        const params = new URLSearchParams({
+                            limit: this.limit,
+                            offset: this.offset,
+                            sort: this.sortBy,
+                            order: this.order
+                        });
+                        
+                        const response = await fetch(`/api/sessions?${params}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.sessions = data.sessions || [];
+                            this.total = data.total || 0;
+                            
+                            // Calculate stats
+                            this.totalEvents = this.sessions.reduce((sum, s) => sum + s.event_count, 0);
+                            this.totalTokens = this.sessions.reduce((sum, s) => sum + (s.total_tokens || 0), 0);
+                            const avgSeconds = this.sessions.reduce((sum, s) => sum + s.duration_seconds, 0) / (this.sessions.length || 1);
+                            this.avgDuration = this.formatDuration(avgSeconds);
+                        }
+                    } catch (error) {
+                        console.error('Error loading sessions:', error);
+                    }
+                },
+                
+                previousPage() {
+                    if (this.offset > 0) {
+                        this.offset = Math.max(0, this.offset - this.limit);
+                        this.loadSessions();
+                    }
+                },
+                
+                nextPage() {
+                    if (this.offset + this.limit < this.total) {
+                        this.offset += this.limit;
+                        this.loadSessions();
+                    }
+                },
+                
+                goToPage(page) {
+                    if (page !== '...') {
+                        this.offset = (page - 1) * this.limit;
+                        this.loadSessions();
+                    }
+                },
+                
+                formatDateTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    return date.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                },
+                
+                formatRelativeTime(timestamp) {
+                    if (!timestamp) return '';
+                    const date = new Date(timestamp);
+                    const now = new Date();
+                    const diff = now - date;
+                    
+                    const minutes = Math.floor(diff / 60000);
+                    const hours = Math.floor(diff / 3600000);
+                    const days = Math.floor(diff / 86400000);
+                    
+                    if (minutes < 1) return 'just now';
+                    if (minutes < 60) return `${minutes}m ago`;
+                    if (hours < 24) return `${hours}h ago`;
+                    if (days < 7) return `${days}d ago`;
+                    return '';
+                },
+                
+                formatDuration(seconds) {
+                    if (!seconds || seconds < 1) return '-';
+                    
+                    if (seconds < 60) {
+                        return `${Math.round(seconds)}s`;
+                    } else if (seconds < 3600) {
+                        const minutes = Math.floor(seconds / 60);
+                        const secs = Math.round(seconds % 60);
+                        return `${minutes}m ${secs}s`;
+                    } else {
+                        const hours = Math.floor(seconds / 3600);
+                        const minutes = Math.floor((seconds % 3600) / 60);
+                        return `${hours}h ${minutes}m`;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -62,9 +62,11 @@ function dashboard() {
         
         async loadSessions() {
             try {
-                const response = await fetch('/api/sessions');
+                const response = await fetch('/api/sessions?limit=10');
                 if (response.ok) {
-                    this.sessions = await response.json();
+                    const data = await response.json();
+                    // Handle both old array format and new paginated format
+                    this.sessions = Array.isArray(data) ? data : (data.sessions || []);
                 }
             } catch (error) {
                 console.error('Error loading sessions:', error);

@@ -11,9 +11,16 @@
 <body class="bg-gray-100">
     <div x-data="dashboard()" x-init="init()" class="container mx-auto p-4 max-w-7xl">
         <!-- Header -->
-        <div class="mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Claude Events Dashboard</h1>
-            <p class="text-gray-600">Real-time monitoring of Claude Code subagent invocations</p>
+        <div class="mb-6 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Claude Events Dashboard</h1>
+                <p class="text-gray-600">Real-time monitoring of Claude Code subagent invocations</p>
+            </div>
+            <nav class="flex gap-4">
+                <a href="/" class="text-blue-600 hover:text-blue-800 font-medium">Dashboard</a>
+                <a href="/sessions" class="text-blue-600 hover:text-blue-800 font-medium">Sessions</a>
+                <a href="/subagents" class="text-blue-600 hover:text-blue-800 font-medium">Subagents</a>
+            </nav>
         </div>
         
         <!-- Summary Cards -->
@@ -65,7 +72,10 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <!-- Subagent Performance Table -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">Subagent Performance</h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">Subagent Performance</h2>
+                    <a href="/subagents" class="text-sm text-blue-600 hover:text-blue-800">View All →</a>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
@@ -95,7 +105,10 @@
             
             <!-- Recent Sessions -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">Recent Sessions</h2>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">Recent Sessions</h2>
+                    <a href="/sessions" class="text-sm text-blue-600 hover:text-blue-800">View All →</a>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
@@ -108,9 +121,10 @@
                         </thead>
                         <tbody>
                             <template x-for="session in sessions" :key="session.session_id">
-                                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                <tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" 
+                                    @click="window.location.href = '/session/' + session.session_id">
                                     <td class="py-3 px-2">
-                                        <div class="font-mono text-xs text-gray-600" x-text="session.session_id?.substring(0, 8) + '...'"></div>
+                                        <div class="font-mono text-xs text-blue-600 hover:text-blue-800" x-text="session.session_id?.substring(0, 8) + '...'"></div>
                                         <div class="text-xs text-gray-500" x-text="formatTime(session.session_start)"></div>
                                     </td>
                                     <td class="text-right py-3 px-2 text-gray-700" x-text="session.event_count"></td>
