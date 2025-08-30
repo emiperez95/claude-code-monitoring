@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Tracking - Claude Events</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="trackingPage()" x-init="init()" class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Comprehensive Session Tracking</h1>
+            <p class="text-gray-600">Real-time tracking of all Claude Code activities</p>
+            <div class="mt-2">
+                <span class="text-sm text-gray-500">Current Session:</span>
+                <span class="font-mono text-sm text-blue-600" x-text="sessionId || 'Loading...'"></span>
+            </div>
+        </div>
+        
+        <!-- Session Lifecycle -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Session Lifecycle</h2>
+            <div class="flex flex-wrap gap-4">
+                <template x-for="event in lifecycle" :key="event.timestamp">
+                    <div class="px-4 py-2 rounded-full text-sm"
+                         :class="{
+                             'bg-green-100 text-green-800': event.event_type === 'SessionStart',
+                             'bg-red-100 text-red-800': event.event_type === 'SessionEnd',
+                             'bg-yellow-100 text-yellow-800': event.event_type === 'PreCompact'
+                         }">
+                        <span x-text="event.event_type"></span>
+                        <span x-show="event.source" class="ml-1 text-xs opacity-75" x-text="'(' + event.source + ')'"></span>
+                        <span class="ml-2 text-xs" x-text="formatTime(event.timestamp)"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+        
+        <!-- Tool Usage Statistics -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Tool Usage Table -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Tool Usage</h2>
+                <div class="overflow-x-auto max-h-96">
+                    <table class="w-full text-sm">
+                        <thead class="sticky top-0 bg-white">
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-2 px-2 font-medium text-gray-700">Tool</th>
+                                <th class="text-right py-2 px-2 font-medium text-gray-700">Pre</th>
+                                <th class="text-right py-2 px-2 font-medium text-gray-700">Post</th>
+                                <th class="text-right py-2 px-2 font-medium text-gray-700">Commands</th>
+                                <th class="text-right py-2 px-2 font-medium text-gray-700">Files</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="stat in toolStats" :key="stat.tool_name">
+                                <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                    <td class="py-2 px-2 font-medium text-gray-900" x-text="stat.tool_name"></td>
+                                    <td class="text-right py-2 px-2 text-gray-700" x-text="stat.pre_count"></td>
+                                    <td class="text-right py-2 px-2 text-gray-700" x-text="stat.post_count"></td>
+                                    <td class="text-right py-2 px-2 text-gray-600" x-text="stat.unique_commands || '-'"></td>
+                                    <td class="text-right py-2 px-2 text-gray-600" x-text="stat.unique_files || '-'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- File Operations -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Recent File Operations</h2>
+                <div class="overflow-y-auto max-h-96 space-y-2">
+                    <template x-for="op in fileOperations" :key="op.timestamp">
+                        <div class="text-sm border-l-2 pl-3 py-1"
+                             :class="{
+                                 'border-blue-500': op.tool_name === 'Read',
+                                 'border-green-500': op.tool_name === 'Write',
+                                 'border-yellow-500': op.tool_name === 'Edit' || op.tool_name === 'MultiEdit'
+                             }">
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium" x-text="op.tool_name"></span>
+                                <span class="text-xs text-gray-500" x-text="formatTime(op.timestamp)"></span>
+                            </div>
+                            <div class="text-xs text-gray-600 truncate" :title="op.file_path" x-text="op.file_path"></div>
+                        </div>
+                    </template>
+                    <div x-show="fileOperations.length === 0" class="text-center text-gray-500 py-4">
+                        No file operations yet
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Event Timeline -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">Event Timeline</h2>
+                <div class="flex gap-2">
+                    <button @click="autoRefresh = !autoRefresh" 
+                            class="text-sm px-3 py-1 rounded border"
+                            :class="autoRefresh ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300'">
+                        <span x-text="autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF'"></span>
+                    </button>
+                    <button @click="loadData()" class="text-sm text-blue-600 hover:text-blue-800">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                <template x-for="event in timeline" :key="event.timestamp">
+                    <div class="text-sm border-l-2 pl-3 py-2 hover:bg-gray-50"
+                         :class="{
+                             'border-blue-400': event.event_type === 'PreToolUse',
+                             'border-green-400': event.event_type === 'PostToolUse',
+                             'border-gray-400': !['PreToolUse', 'PostToolUse'].includes(event.event_type)
+                         }">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <span class="font-medium" x-text="event.tool_name || event.event_type"></span>
+                                <span class="ml-2 text-xs px-2 py-0.5 rounded"
+                                      :class="{
+                                          'bg-blue-100 text-blue-700': event.event_type === 'PreToolUse',
+                                          'bg-green-100 text-green-700': event.event_type === 'PostToolUse'
+                                      }"
+                                      x-text="event.event_type === 'PreToolUse' ? 'PRE' : (event.event_type === 'PostToolUse' ? 'POST' : event.event_type)"></span>
+                            </div>
+                            <span class="text-xs text-gray-500" x-text="formatTime(event.timestamp)"></span>
+                        </div>
+                        
+                        <!-- Show relevant details based on tool type -->
+                        <div class="mt-1 text-xs text-gray-600">
+                            <template x-if="event.command">
+                                <div class="truncate" :title="event.command">
+                                    <span class="font-medium">Command:</span> <span x-text="event.command"></span>
+                                </div>
+                            </template>
+                            <template x-if="event.file_path">
+                                <div class="truncate" :title="event.file_path">
+                                    <span class="font-medium">File:</span> <span x-text="event.file_path"></span>
+                                </div>
+                            </template>
+                            <template x-if="event.pattern">
+                                <div class="truncate" :title="event.pattern">
+                                    <span class="font-medium">Pattern:</span> <span x-text="event.pattern"></span>
+                                </div>
+                            </template>
+                            <template x-if="event.url">
+                                <div class="truncate" :title="event.url">
+                                    <span class="font-medium">URL:</span> <span x-text="event.url"></span>
+                                </div>
+                            </template>
+                            <template x-if="event.description">
+                                <div class="truncate" :title="event.description">
+                                    <span class="font-medium">Description:</span> <span x-text="event.description"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function trackingPage() {
+            return {
+                sessionId: null,
+                lifecycle: [],
+                toolStats: [],
+                fileOperations: [],
+                timeline: [],
+                autoRefresh: true,
+                refreshInterval: null,
+                
+                async init() {
+                    await this.loadData();
+                    if (this.autoRefresh) {
+                        this.startAutoRefresh();
+                    }
+                },
+                
+                async loadData() {
+                    try {
+                        // Load current session data
+                        const sessionResponse = await fetch('/api/tracking/current-session');
+                        if (sessionResponse.ok) {
+                            const data = await sessionResponse.json();
+                            this.sessionId = data.session_id;
+                            this.lifecycle = data.lifecycle || [];
+                            this.toolStats = data.tool_stats || [];
+                            this.timeline = data.timeline || [];
+                        }
+                        
+                        // Load file operations
+                        const fileResponse = await fetch('/api/tracking/file-operations');
+                        if (fileResponse.ok) {
+                            this.fileOperations = await fileResponse.json();
+                        }
+                    } catch (error) {
+                        console.error('Error loading tracking data:', error);
+                    }
+                },
+                
+                startAutoRefresh() {
+                    this.refreshInterval = setInterval(() => {
+                        if (this.autoRefresh) {
+                            this.loadData();
+                        }
+                    }, 3000); // Refresh every 3 seconds
+                },
+                
+                formatTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    return date.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                },
+                
+                // Clean up interval on page unload
+                destroy() {
+                    if (this.refreshInterval) {
+                        clearInterval(this.refreshInterval);
+                    }
+                }
+            }
+        }
+        
+        // Clean up when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (window.trackingPageInstance) {
+                window.trackingPageInstance.destroy();
+            }
+        });
+    </script>
+</body>
+</html>

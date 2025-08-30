@@ -8,18 +8,26 @@ Real-time monitoring and analytics dashboard for Claude Code subagent invocation
 - **Real-time monitoring** of Claude Code events
 - **Session tracking** with detailed timeline views
 - **Subagent performance metrics** and analytics
-- **Searchable and sortable** session history
+- **Comprehensive event tracking** for ALL tools and events
+- **Session context display** (working directory, tmux session)
 - **Auto-refresh** capabilities
 
 ### 🪝 Event Capture
-- Captures `PreToolUse`, `PostToolUse`, and `SubagentStop` events
+- **Dual tracking system**:
+  - `claude_events` table: Focused subagent (Task tool) tracking
+  - `all_events` table: Comprehensive tracking of ALL tools and events
+- Captures `PreToolUse`, `PostToolUse`, `SessionStart`, `SessionEnd`, `SubagentStop` events
 - Records full context including prompts, responses, and metadata
+- **Session context**: Working directory and tmux session name
 - Dual storage: DuckDB for analytics + text logs for redundancy
 
 ### 📈 Analytics
 - Session duration and token usage tracking
 - Subagent invocation frequency and performance
+- **Tool usage patterns** across all Claude Code tools
 - Response time analysis with min/avg/max metrics
+- **Session lifecycle tracking** with start/end events
+- **File operations monitoring** (Read, Write, Edit)
 - Agent usage patterns across sessions
 
 ## Quick Start
@@ -44,6 +52,8 @@ pip install -r requirements.txt
 ```
 
 3. Configure Claude Code hooks in `~/.claude/settings.json`:
+
+For subagent-only tracking:
 ```json
 {
   "hooks": {
@@ -72,6 +82,40 @@ pip install -r requirements.txt
 }
 ```
 
+For comprehensive tracking (ALL tools and events):
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "bash /path/to/claude-code-monitoring/hooks/log-all-events.sh PreToolUse"
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "bash /path/to/claude-code-monitoring/hooks/log-all-events.sh PostToolUse"
+      }]
+    }],
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bash /path/to/claude-code-monitoring/hooks/log-all-events.sh SessionStart"
+      }]
+    }],
+    "SessionEnd": [{
+      "hooks": [{
+        "type": "command",
+        "command": "bash /path/to/claude-code-monitoring/hooks/log-all-events.sh SessionEnd"
+      }]
+    }]
+  }
+}
+```
+
 4. Restart Claude Code for hooks to take effect
 
 5. Start the web dashboard:
@@ -86,20 +130,24 @@ python web-ui/app.py
 ```
 claude-code-monitoring/
 ├── hooks/
-│   └── log-subagent.sh      # Hook script for capturing events
+│   ├── log-subagent.sh      # Subagent-focused tracking
+│   └── log-all-events.sh    # Comprehensive event tracking
 ├── logs/
-│   ├── claude_events.duckdb # DuckDB database
-│   └── subagent.log         # Text log backup
+│   ├── claude_events.duckdb # DuckDB database (both tables)
+│   ├── subagent.log         # Subagent text log
+│   └── all_events.log       # All events text log
 ├── web-ui/
 │   ├── app.py               # Flask backend
 │   ├── requirements.txt     # Python dependencies
 │   ├── static/
 │   │   └── dashboard.js     # Frontend JavaScript
 │   └── templates/
-│       ├── index.html       # Main dashboard
-│       ├── session_detail.html
-│       ├── sessions.html    # All sessions list
-│       └── subagents.html   # Subagent analytics
+│       ├── index.html           # Main dashboard
+│       ├── session_detail.html  # Subagent session detail
+│       ├── sessions.html        # All sessions list
+│       ├── subagents.html       # Subagent analytics
+│       ├── tracking.html        # Current session tracking
+│       └── all_tracking.html    # All sessions with timeline
 └── telemetry.md            # OpenTelemetry setup guide
 ```
 
@@ -129,9 +177,23 @@ claude-code-monitoring/
 - Recent invocation history
 - Min/avg/max response times
 
+### Session Tracking (`/tracking`)
+- Real-time monitoring of current session
+- Tool usage statistics
+- File operations monitor
+- Event timeline with auto-refresh
+
+### All Sessions Tracking (`/all-tracking`)
+- Overview of ALL sessions with context
+- Shows working directory and tmux session
+- Click any session for detailed timeline
+- Collapsible details for edit operations
+- Raw JSON data viewer
+
 ## Database Schema
 
-Events are stored in DuckDB with flexible JSON columns:
+### Subagent Events Table (`claude_events`)
+Focused tracking of Task tool (subagent) invocations:
 
 ```sql
 CREATE TABLE claude_events (
@@ -141,9 +203,25 @@ CREATE TABLE claude_events (
 );
 ```
 
+### Comprehensive Events Table (`all_events`)
+Tracks ALL Claude Code tool usage and session events:
+
+```sql
+CREATE TABLE all_events (
+    timestamp TIMESTAMP,
+    event_type VARCHAR,      -- 'PreToolUse', 'PostToolUse', 'SessionStart', etc.
+    tool_name VARCHAR,       -- Tool that was invoked
+    matcher VARCHAR,         -- Hook matcher that triggered
+    data JSON                -- Full event payload with session context
+);
+```
+
 Key JSON fields:
 - `session_id` - Unique session identifier
-- `tool_input.subagent_type` - Type of subagent invoked
+- `cwd` - Working directory where session is running
+- `tmux_session` - Tmux session name (if in tmux)
+- `tool_name` - Tool being invoked (Bash, Edit, Read, Task, etc.)
+- `tool_input.subagent_type` - Type of subagent (for Task tool)
 - `tool_input.prompt` - Input prompt
 - `tool_response.content[0].text` - Response text
 - `tool_response.totalDurationMs` - Execution time
@@ -155,17 +233,27 @@ Key JSON fields:
 ```bash
 duckdb logs/claude_events.duckdb
 
--- Recent events
+-- Recent subagent events
 SELECT * FROM claude_events ORDER BY timestamp DESC LIMIT 10;
 
--- Session summary
+-- All tool usage across sessions
+SELECT 
+    json_extract_string(data, '$.tool_name') as tool,
+    COUNT(*) as usage_count
+FROM all_events 
+WHERE event_type = 'PreToolUse'
+GROUP BY tool
+ORDER BY usage_count DESC;
+
+-- Sessions with context
 SELECT 
     json_extract_string(data, '$.session_id') as session,
-    COUNT(*) as events,
-    MIN(timestamp) as start_time
-FROM claude_events 
+    MAX(json_extract_string(data, '$.cwd')) as working_dir,
+    MAX(json_extract_string(data, '$.tmux_session')) as tmux,
+    COUNT(*) as events
+FROM all_events 
 GROUP BY session
-ORDER BY start_time DESC;
+ORDER BY MAX(timestamp) DESC;
 ```
 
 ### API Endpoints
@@ -176,6 +264,10 @@ ORDER BY start_time DESC;
 - `GET /api/session/<id>` - Detailed session data
 - `GET /api/subagent/<type>` - Individual subagent analytics
 - `GET /api/recent-events` - Recent event stream
+- `GET /api/tracking/current-session` - Current session comprehensive data
+- `GET /api/tracking/all-sessions` - All sessions with context (cwd, tmux)
+- `GET /api/tracking/session/<id>/timeline` - Full timeline for any session
+- `GET /api/tracking/file-operations` - Recent file operations
 
 ## OpenTelemetry Integration
 
