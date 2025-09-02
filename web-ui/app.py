@@ -208,6 +208,11 @@ def all_tracking_page():
     """Display all sessions tracking with timeline"""
     return render_template('all_tracking.html')
 
+@app.route('/session-timeline/<session_id>')
+def session_timeline_page(session_id):
+    """Display detailed timeline for a specific session"""
+    return render_template('session_timeline.html', session_id=session_id)
+
 @app.route('/api/tracking/current-session')
 def get_current_session_tracking():
     """Get comprehensive tracking data for the current session"""

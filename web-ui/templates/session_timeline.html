@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Timeline - Claude Events</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="sessionTimelinePage('{{ session_id }}')" x-init="init()" class="container mx-auto p-4 max-w-7xl">
+        <!-- Header with Breadcrumb -->
+        <div class="mb-6">
+            <nav class="flex items-center text-sm text-gray-600 mb-4">
+                <a href="/all-tracking" class="hover:text-blue-600">All Sessions</a>
+                <svg class="w-4 h-4 mx-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+                <span class="text-gray-800">Session Timeline</span>
+            </nav>
+            
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Session Timeline</h1>
+                    <p class="text-sm font-mono text-gray-600 mt-1" x-text="sessionId"></p>
+                    <div x-show="sessionInfo" class="mt-2 flex flex-wrap gap-3">
+                        <span x-show="sessionInfo.cwd" class="text-sm text-gray-700">
+                            <span class="font-medium">Working Dir:</span> 
+                            <span x-text="sessionInfo.cwd"></span>
+                        </span>
+                        <span x-show="sessionInfo.tmux_session" class="text-sm bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                            tmux: <span x-text="sessionInfo.tmux_session"></span>
+                        </span>
+                        <span x-show="sessionInfo.duration_seconds" class="text-sm text-gray-700">
+                            <span class="font-medium">Duration:</span> 
+                            <span x-text="formatDuration(sessionInfo.duration_seconds)"></span>
+                        </span>
+                        <span x-show="sessionInfo.total_events" class="text-sm text-gray-700">
+                            <span class="font-medium">Events:</span> 
+                            <span x-text="sessionInfo.total_events"></span>
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <button @click="toggleAllDetails()" 
+                            class="text-xs px-3 py-1 rounded border bg-white text-gray-700 border-gray-300 hover:bg-gray-50">
+                        <span x-text="allDetailsExpanded ? 'Collapse All' : 'Expand All'"></span>
+                    </button>
+                    <button @click="showRawData = !showRawData" 
+                            class="text-xs px-3 py-1 rounded border"
+                            :class="showRawData ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300'">
+                        <span x-text="showRawData ? 'Hide raw data' : 'Show raw data'"></span>
+                    </button>
+                    <button @click="loadTimeline()" 
+                            class="text-sm text-blue-600 hover:text-blue-800">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Filter Toolbar -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-gray-700">Filter by type:</label>
+                    <select x-model="filterEventType" @change="applyFilters()" 
+                            class="text-sm border border-gray-300 rounded px-2 py-1">
+                        <option value="">All Events</option>
+                        <option value="SessionStart">Session Start</option>
+                        <option value="SessionEnd">Session End</option>
+                        <option value="PreToolUse">Pre Tool Use</option>
+                        <option value="PostToolUse">Post Tool Use</option>
+                        <option value="SubagentStop">Subagent Stop</option>
+                        <option value="PreCompact">Pre Compact</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-gray-700">Filter by tool:</label>
+                    <select x-model="filterToolName" @change="applyFilters()" 
+                            class="text-sm border border-gray-300 rounded px-2 py-1">
+                        <option value="">All Tools</option>
+                        <template x-for="tool in availableTools" :key="tool">
+                            <option :value="tool" x-text="tool"></option>
+                        </template>
+                    </select>
+                </div>
+                
+                <div class="ml-auto text-sm text-gray-600">
+                    Showing <span x-text="filteredTimeline.length"></span> of <span x-text="timeline.length"></span> events
+                </div>
+            </div>
+        </div>
+        
+        <!-- Timeline Container -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-6">
+                <div class="space-y-4">
+                    <template x-for="(event, index) in filteredTimeline" :key="index">
+                        <div class="flex items-start gap-4">
+                            <!-- Timeline connector -->
+                            <div class="flex flex-col items-center">
+                                <div class="w-4 h-4 rounded-full flex-shrink-0"
+                                     :class="{
+                                         'bg-green-500': event.event_type === 'SessionStart',
+                                         'bg-red-500': event.event_type === 'SessionEnd',
+                                         'bg-blue-500': event.event_type === 'PreToolUse',
+                                         'bg-green-400': event.event_type === 'PostToolUse',
+                                         'bg-gradient-to-r from-blue-500 to-green-400': event.event_type === 'MergedToolUse',
+                                         'bg-purple-500': event.event_type === 'SubagentStop',
+                                         'bg-yellow-500': event.event_type === 'PreCompact',
+                                         'bg-gray-400': !['SessionStart', 'SessionEnd', 'PreToolUse', 'PostToolUse', 'MergedToolUse', 'SubagentStop', 'PreCompact'].includes(event.event_type)
+                                     }"></div>
+                                <div x-show="index < filteredTimeline.length - 1" 
+                                     class="w-0.5 h-full bg-gray-300 flex-1 min-h-[2rem]"></div>
+                            </div>
+                            
+                            <!-- Event content -->
+                            <div class="flex-1 pb-4">
+                                <div class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-semibold text-sm" 
+                                                  x-text="event.tool_name === 'Task' && event.subagent_type ? 'Task: ' + event.subagent_type : (event.tool_name || event.event_type)"></span>
+                                            <template x-if="event.event_type === 'MergedToolUse'">
+                                                <div class="flex items-center gap-1">
+                                                    <span class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">PRE</span>
+                                                    <span class="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">POST</span>
+                                                    <span x-show="event.duration_ms" class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700" 
+                                                          x-text="formatDuration(event.duration_ms / 1000)"></span>
+                                                </div>
+                                            </template>
+                                            <template x-if="event.event_type !== 'MergedToolUse'">
+                                                <span class="text-xs px-2 py-0.5 rounded"
+                                                      :class="{
+                                                          'bg-blue-100 text-blue-700': event.event_type === 'PreToolUse',
+                                                          'bg-green-100 text-green-700': event.event_type === 'PostToolUse',
+                                                          'bg-purple-100 text-purple-700': event.event_type === 'SubagentStop',
+                                                          'bg-yellow-100 text-yellow-700': event.event_type === 'PreCompact',
+                                                          'bg-gray-100 text-gray-700': !['PreToolUse', 'PostToolUse', 'SubagentStop', 'PreCompact'].includes(event.event_type)
+                                                      }"
+                                                      x-text="formatEventType(event.event_type)"></span>
+                                            </template>
+                                        </div>
+                                        <div class="text-xs text-gray-500">
+                                            <template x-if="event.timestamps">
+                                                <span x-text="formatTime(event.timestamps.pre) + ' → ' + formatTime(event.timestamps.post)"></span>
+                                            </template>
+                                            <template x-if="!event.timestamps">
+                                                <span x-text="formatTime(event.timestamp)"></span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Event primary details -->
+                                    <div class="text-sm text-gray-700 space-y-1">
+                                        <template x-if="event.command">
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-gray-600 min-w-[80px]">Command:</span>
+                                                <code class="bg-gray-800 text-gray-100 px-2 py-1 rounded text-xs flex-1 overflow-x-auto">
+                                                    <pre x-text="event.command" class="whitespace-pre-wrap break-all"></pre>
+                                                </code>
+                                            </div>
+                                        </template>
+                                        <template x-if="event.file_path">
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-gray-600 min-w-[80px]">File:</span>
+                                                <span class="text-blue-600" x-text="event.file_path"></span>
+                                            </div>
+                                        </template>
+                                        <template x-if="event.pattern">
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-gray-600 min-w-[80px]">Pattern:</span>
+                                                <code class="bg-yellow-50 text-yellow-800 px-1 rounded" x-text="event.pattern"></code>
+                                            </div>
+                                        </template>
+                                        <template x-if="event.url">
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-gray-600 min-w-[80px]">URL:</span>
+                                                <a :href="event.url" target="_blank" class="text-blue-600 hover:underline" x-text="event.url"></a>
+                                            </div>
+                                        </template>
+                                        <template x-if="event.query">
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-gray-600 min-w-[80px]">Query:</span>
+                                                <span x-text="event.query"></span>
+                                            </div>
+                                        </template>
+                                        <template x-if="event.description">
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-gray-600 min-w-[80px]">Description:</span>
+                                                <span x-text="event.description"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                    
+                                    <!-- Collapsible sections for edit operations -->
+                                    <template x-if="event.old_string || event.new_string">
+                                        <details class="mt-3 border-l-4 border-blue-300 pl-3" :open="allDetailsExpanded">
+                                            <summary class="cursor-pointer hover:text-blue-600 font-medium text-sm">
+                                                Edit Details
+                                            </summary>
+                                            <div class="mt-2 space-y-2">
+                                                <template x-if="event.old_string">
+                                                    <div class="p-3 bg-red-50 rounded border border-red-200">
+                                                        <span class="font-medium text-red-700 text-xs">Removed:</span>
+                                                        <pre class="mt-1 whitespace-pre-wrap text-xs text-red-800 overflow-x-auto" x-text="event.old_string"></pre>
+                                                    </div>
+                                                </template>
+                                                <template x-if="event.new_string">
+                                                    <div class="p-3 bg-green-50 rounded border border-green-200">
+                                                        <span class="font-medium text-green-700 text-xs">Added:</span>
+                                                        <pre class="mt-1 whitespace-pre-wrap text-xs text-green-800 overflow-x-auto" x-text="event.new_string"></pre>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </details>
+                                    </template>
+                                    
+                                    <!-- Collapsible raw data -->
+                                    <template x-if="event.event_type === 'MergedToolUse' && showRawData">
+                                        <details class="mt-3 border-l-4 border-gray-300 pl-3" :open="allDetailsExpanded">
+                                            <summary class="cursor-pointer hover:text-gray-700 text-gray-500 text-sm">
+                                                Raw data (Pre & Post)
+                                            </summary>
+                                            <div class="mt-2 space-y-2">
+                                                <div>
+                                                    <div class="text-xs font-medium text-blue-600 mb-1">PreToolUse:</div>
+                                                    <pre class="p-3 bg-gray-800 text-gray-100 rounded overflow-x-auto text-xs" x-text="JSON.stringify(event.full_data_pre, null, 2)"></pre>
+                                                </div>
+                                                <div>
+                                                    <div class="text-xs font-medium text-green-600 mb-1">PostToolUse:</div>
+                                                    <pre class="p-3 bg-gray-800 text-gray-100 rounded overflow-x-auto text-xs" x-text="JSON.stringify(event.full_data_post, null, 2)"></pre>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </template>
+                                    <template x-if="event.event_type !== 'MergedToolUse' && event.full_data && showRawData">
+                                        <details class="mt-3 border-l-4 border-gray-300 pl-3" :open="allDetailsExpanded">
+                                            <summary class="cursor-pointer hover:text-gray-700 text-gray-500 text-sm">
+                                                Raw data
+                                            </summary>
+                                            <pre class="mt-2 p-3 bg-gray-800 text-gray-100 rounded overflow-x-auto text-xs" x-text="JSON.stringify(event.full_data, null, 2)"></pre>
+                                        </details>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <div x-show="filteredTimeline.length === 0" class="text-center py-12 text-gray-500">
+                    <svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <p class="text-lg font-medium">No events found</p>
+                    <p class="text-sm text-gray-400 mt-1">Try adjusting your filters or refresh the page</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function sessionTimelinePage(sessionId) {
+            return {
+                sessionId: sessionId,
+                sessionInfo: null,
+                timeline: [],
+                filteredTimeline: [],
+                showRawData: false,
+                allDetailsExpanded: false,
+                filterEventType: '',
+                filterToolName: '',
+                availableTools: [],
+                
+                async init() {
+                    await this.loadSessionInfo();
+                    await this.loadTimeline();
+                },
+                
+                async loadSessionInfo() {
+                    try {
+                        const response = await fetch('/api/tracking/all-sessions');
+                        if (response.ok) {
+                            const sessions = await response.json();
+                            this.sessionInfo = sessions.find(s => s.session_id === this.sessionId);
+                        }
+                    } catch (error) {
+                        console.error('Error loading session info:', error);
+                    }
+                },
+                
+                async loadTimeline() {
+                    try {
+                        const response = await fetch(`/api/tracking/session/${this.sessionId}/timeline`);
+                        if (response.ok) {
+                            const rawTimeline = await response.json();
+                            this.timeline = this.mergePrePostPairs(rawTimeline);
+                            this.extractAvailableTools();
+                            this.applyFilters();
+                        }
+                    } catch (error) {
+                        console.error('Error loading timeline:', error);
+                    }
+                },
+                
+                mergePrePostPairs(events) {
+                    const merged = [];
+                    let i = 0;
+                    
+                    while (i < events.length) {
+                        const current = events[i];
+                        const next = events[i + 1];
+                        
+                        // Check if current is PreToolUse and next is PostToolUse with matching inputs
+                        if (current.event_type === 'PreToolUse' && 
+                            next && next.event_type === 'PostToolUse' &&
+                            current.tool_name === next.tool_name &&
+                            JSON.stringify(current.full_data?.tool_input) === JSON.stringify(next.full_data?.tool_input)) {
+                            
+                            // Create merged event
+                            merged.push({
+                                ...current,
+                                event_type: 'MergedToolUse',
+                                timestamps: {
+                                    pre: current.timestamp,
+                                    post: next.timestamp
+                                },
+                                full_data_pre: current.full_data,
+                                full_data_post: next.full_data,
+                                full_data: current.full_data, // Keep for compatibility
+                                tool_response: next.full_data?.tool_response,
+                                duration_ms: new Date(next.timestamp) - new Date(current.timestamp)
+                            });
+                            
+                            i += 2; // Skip both events
+                        } else {
+                            // Keep event as-is
+                            merged.push(current);
+                            i++;
+                        }
+                    }
+                    
+                    return merged;
+                },
+                
+                extractAvailableTools() {
+                    const tools = new Set();
+                    this.timeline.forEach(event => {
+                        if (event.tool_name) {
+                            tools.add(event.tool_name);
+                        }
+                    });
+                    this.availableTools = Array.from(tools).sort();
+                },
+                
+                applyFilters() {
+                    this.filteredTimeline = this.timeline.filter(event => {
+                        // Handle event type filter
+                        if (this.filterEventType) {
+                            // Special handling for merged events
+                            if (event.event_type === 'MergedToolUse') {
+                                // Show merged events if filtering for Pre or Post
+                                if (this.filterEventType !== 'PreToolUse' && this.filterEventType !== 'PostToolUse') {
+                                    return false;
+                                }
+                            } else if (event.event_type !== this.filterEventType) {
+                                return false;
+                            }
+                        }
+                        
+                        // Handle tool name filter
+                        if (this.filterToolName && event.tool_name !== this.filterToolName) {
+                            return false;
+                        }
+                        
+                        return true;
+                    });
+                },
+                
+                toggleAllDetails() {
+                    this.allDetailsExpanded = !this.allDetailsExpanded;
+                },
+                
+                formatTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    return date.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                },
+                
+                formatDuration(seconds) {
+                    if (!seconds) return '-';
+                    
+                    if (seconds < 60) {
+                        return `${Math.round(seconds)}s`;
+                    } else if (seconds < 3600) {
+                        const minutes = Math.floor(seconds / 60);
+                        const secs = Math.round(seconds % 60);
+                        return `${minutes}m ${secs}s`;
+                    } else {
+                        const hours = Math.floor(seconds / 3600);
+                        const minutes = Math.floor((seconds % 3600) / 60);
+                        return `${hours}h ${minutes}m`;
+                    }
+                },
+                
+                formatEventType(type) {
+                    switch(type) {
+                        case 'PreToolUse': return 'PRE';
+                        case 'PostToolUse': return 'POST';
+                        case 'SessionStart': return 'START';
+                        case 'SessionEnd': return 'END';
+                        case 'SubagentStop': return 'SUBAGENT STOP';
+                        case 'PreCompact': return 'COMPACT';
+                        default: return type;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
