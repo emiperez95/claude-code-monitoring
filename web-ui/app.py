@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect
+from flask import Flask, render_template, jsonify, request
 import duckdb
 from datetime import datetime
 import json
@@ -14,17 +14,7 @@ def index():
     """Display comprehensive session tracking from all_events"""
     return render_template('all_tracking.html')
 
-# Removed old /api/summary endpoint - now using all_events table
-
-# Removed old /api/subagents endpoint - now using all_events table
-
-# Removed old /api/recent-events endpoint - now using all_events table
-
-# Removed old /api/timeline endpoint - now using all_events table
-
-# Removed old /api/sessions endpoint - now using all_events table
-
-# Old routes removed - now using root (/) as main interface
+# API endpoints now exclusively use the all_events table for comprehensive tracking
 
 @app.route('/session-timeline/<session_id>')
 def session_timeline_page(session_id):
@@ -501,9 +491,7 @@ def get_session_timeline(session_id):
         'full_data': json.loads(event[14]) if event[14] else None
     } for event in events])
 
-# Removed old /api/session/<session_id> endpoint - now using all_events table
-
-# Removed old /api/subagent/<subagent_type> endpoint - now using all_events table
+# All API endpoints use the all_events table
 
 if __name__ == '__main__':
     # Check if database exists
