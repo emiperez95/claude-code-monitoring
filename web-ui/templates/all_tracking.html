@@ -16,13 +16,10 @@
                 <p class="text-gray-600">Complete overview of all Claude Code sessions</p>
             </div>
             <div class="flex items-center gap-3">
-                <a href="/" class="inline-flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                <button @click="loadData()" class="inline-flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                     </svg>
-                    Main Dashboard
-                </a>
-                <button @click="loadData()" class="text-sm text-blue-600 hover:text-blue-800">
                     Refresh
                 </button>
             </div>
@@ -105,9 +102,10 @@
                 <div class="p-4">
                     <div class="grid grid-cols-1 gap-3">
                         <template x-for="agent in agents" :key="agent.agent_type">
-                            <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                            <div class="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                                 @click="window.location.href = '/agent/' + encodeURIComponent(agent.agent_type)">
                                 <div class="flex items-start justify-between mb-2">
-                                    <h3 class="font-medium text-gray-900 text-sm" x-text="agent.agent_type"></h3>
+                                    <h3 class="font-medium text-gray-900 text-sm hover:text-blue-600" x-text="agent.agent_type"></h3>
                                     <span class="px-2 py-1 text-xs rounded-full"
                                           :class="getAgentColorClass(agent.agent_type)"
                                           x-text="agent.usage_count + ' uses'"></span>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent: {{ agent_type }} - Claude Events</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="agentDetailPage('{{ agent_type }}')" x-init="init()" class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Agent: <span x-text="agentType"></span></h1>
+                <p class="text-gray-600">Detailed statistics and invocation history</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/" class="inline-flex items-center gap-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back
+                </a>
+                <button @click="loadData()" class="text-sm text-blue-600 hover:text-blue-800">
+                    Refresh
+                </button>
+            </div>
+        </div>
+        
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider">Total Invocations</h3>
+                <p class="text-2xl font-bold text-gray-900 mt-1" x-text="stats.total_invocations || '0'">-</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider">Unique Sessions</h3>
+                <p class="text-2xl font-bold text-gray-900 mt-1" x-text="stats.unique_sessions || '0'">-</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider">Avg Duration</h3>
+                <p class="text-2xl font-bold text-gray-900 mt-1">
+                    <span x-text="stats.avg_duration_ms ? (stats.avg_duration_ms / 1000).toFixed(1) + 's' : '-'"></span>
+                </p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider">Last Used</h3>
+                <p class="text-sm font-medium text-gray-900 mt-1" x-text="formatRelativeTime(stats.last_used)">-</p>
+            </div>
+        </div>
+        
+        <!-- Performance Range Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-bold text-gray-800">Performance Range</h2>
+                <p class="text-sm text-gray-600">Execution time distribution</p>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div>
+                        <h4 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">Minimum</h4>
+                        <p class="text-xl font-semibold text-green-600">
+                            <span x-text="stats.min_duration_ms ? (stats.min_duration_ms / 1000).toFixed(1) + 's' : '-'"></span>
+                        </p>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">Median (P50)</h4>
+                        <p class="text-xl font-semibold text-blue-600">
+                            <span x-text="stats.median_duration_ms ? (stats.median_duration_ms / 1000).toFixed(1) + 's' : '-'"></span>
+                        </p>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">95th Percentile</h4>
+                        <p class="text-xl font-semibold text-orange-600">
+                            <span x-text="stats.p95_duration_ms ? (stats.p95_duration_ms / 1000).toFixed(1) + 's' : '-'"></span>
+                        </p>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-1">Maximum</h4>
+                        <p class="text-xl font-semibold text-red-600">
+                            <span x-text="stats.max_duration_ms ? (stats.max_duration_ms / 1000).toFixed(1) + 's' : '-'"></span>
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- Visual Range Bar -->
+                <div class="mt-6" x-show="stats.min_duration_ms && stats.max_duration_ms">
+                    <div class="flex items-center justify-between text-xs text-gray-600 mb-2">
+                        <span>Performance Distribution</span>
+                        <span>
+                            Range: <span x-text="((stats.max_duration_ms - stats.min_duration_ms) / 1000).toFixed(1) + 's'"></span>
+                        </span>
+                    </div>
+                    <div class="relative h-8 bg-gray-200 rounded-lg overflow-hidden">
+                        <!-- Percentile ranges visualization -->
+                        <div class="absolute inset-0 flex">
+                            <div class="bg-green-400 opacity-50" 
+                                 :style="`width: ${stats.median_duration_ms ? ((stats.median_duration_ms - stats.min_duration_ms) / (stats.max_duration_ms - stats.min_duration_ms) * 100) : 0}%`">
+                            </div>
+                            <div class="bg-blue-400 opacity-50" 
+                                 :style="`width: ${stats.p95_duration_ms && stats.median_duration_ms ? ((stats.p95_duration_ms - stats.median_duration_ms) / (stats.max_duration_ms - stats.min_duration_ms) * 100) : 0}%`">
+                            </div>
+                            <div class="bg-orange-400 opacity-50" 
+                                 :style="`width: ${stats.p95_duration_ms ? ((stats.max_duration_ms - stats.p95_duration_ms) / (stats.max_duration_ms - stats.min_duration_ms) * 100) : 0}%`">
+                            </div>
+                        </div>
+                        <!-- Markers -->
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="absolute h-full w-0.5 bg-gray-800" 
+                                 :style="`left: ${stats.avg_duration_ms ? ((stats.avg_duration_ms - stats.min_duration_ms) / (stats.max_duration_ms - stats.min_duration_ms) * 100) : 0}%`"
+                                 title="Average">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-center gap-4 mt-2 text-xs">
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-green-400 opacity-50 rounded"></span>
+                            <span>0-50%</span>
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-blue-400 opacity-50 rounded"></span>
+                            <span>50-95%</span>
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-3 h-3 bg-orange-400 opacity-50 rounded"></span>
+                            <span>95-100%</span>
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="w-0.5 h-3 bg-gray-800"></span>
+                            <span>Average</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Recent Invocations -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b border-gray-200">
+                    <h2 class="text-lg font-bold text-gray-800">Recent Invocations</h2>
+                    <p class="text-sm text-gray-600">Last 50 uses of this agent</p>
+                </div>
+                <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-2 px-3 font-medium text-gray-700">Time</th>
+                                <th class="text-left py-2 px-3 font-medium text-gray-700">Description</th>
+                                <th class="text-left py-2 px-3 font-medium text-gray-700">Session</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="invocation in recentInvocations" :key="invocation.timestamp">
+                                <tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                                    @click="window.location.href = '/session-timeline/' + invocation.session_id">
+                                    <td class="py-2 px-3">
+                                        <div class="text-xs" x-text="formatDateTime(invocation.timestamp)"></div>
+                                    </td>
+                                    <td class="py-2 px-3">
+                                        <div class="text-xs text-gray-700 truncate max-w-xs" :title="invocation.description" 
+                                             x-text="invocation.description || 'No description'"></div>
+                                    </td>
+                                    <td class="py-2 px-3">
+                                        <div class="font-mono text-xs text-blue-600" x-text="invocation.session_id?.substring(0, 8) + '...'"></div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="recentInvocations.length === 0">
+                                <td colspan="3" class="text-center py-4 text-gray-500">No invocations found</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Sessions Using This Agent -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b border-gray-200">
+                    <h2 class="text-lg font-bold text-gray-800">Sessions</h2>
+                    <p class="text-sm text-gray-600">Sessions that used this agent</p>
+                </div>
+                <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr class="border-b border-gray-200">
+                                <th class="text-left py-2 px-3 font-medium text-gray-700">Session</th>
+                                <th class="text-left py-2 px-3 font-medium text-gray-700">Tmux</th>
+                                <th class="text-right py-2 px-3 font-medium text-gray-700">Duration</th>
+                                <th class="text-right py-2 px-3 font-medium text-gray-700">Events</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="session in sessions" :key="session.session_id">
+                                <tr class="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                                    @click="window.location.href = '/session-timeline/' + session.session_id">
+                                    <td class="py-2 px-3">
+                                        <div class="font-mono text-xs text-blue-600" x-text="session.session_id?.substring(0, 8) + '...'"></div>
+                                        <div class="text-xs text-gray-500" x-text="formatDateTime(session.session_start)"></div>
+                                    </td>
+                                    <td class="py-2 px-3">
+                                        <span x-show="session.tmux_session" class="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded" 
+                                              x-text="session.tmux_session"></span>
+                                        <span x-show="!session.tmux_session" class="text-xs text-gray-400">-</span>
+                                    </td>
+                                    <td class="text-right py-2 px-3 text-xs" x-text="formatDuration(session.duration_seconds)"></td>
+                                    <td class="text-right py-2 px-3 text-xs" x-text="session.total_events"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="sessions.length === 0">
+                                <td colspan="4" class="text-center py-4 text-gray-500">No sessions found</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function agentDetailPage(agentType) {
+            return {
+                agentType: agentType,
+                stats: {},
+                recentInvocations: [],
+                sessions: [],
+                
+                async init() {
+                    await this.loadData();
+                },
+                
+                async loadData() {
+                    try {
+                        const response = await fetch('/api/agent/' + encodeURIComponent(this.agentType));
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.stats = data.stats;
+                            this.recentInvocations = data.recent_invocations;
+                            this.sessions = data.sessions;
+                        }
+                    } catch (error) {
+                        console.error('Error loading agent data:', error);
+                    }
+                },
+                
+                formatDateTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    return date.toLocaleString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                },
+                
+                formatDuration(seconds) {
+                    if (!seconds) return '-';
+                    
+                    if (seconds < 60) {
+                        return `${Math.round(seconds)}s`;
+                    } else if (seconds < 3600) {
+                        const minutes = Math.floor(seconds / 60);
+                        const secs = Math.round(seconds % 60);
+                        return `${minutes}m ${secs}s`;
+                    } else {
+                        const hours = Math.floor(seconds / 3600);
+                        const minutes = Math.floor((seconds % 3600) / 60);
+                        return `${hours}h ${minutes}m`;
+                    }
+                },
+                
+                formatRelativeTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    const now = new Date();
+                    const diff = now - date;
+                    
+                    if (diff < 3600000) { // Less than 1 hour
+                        const minutes = Math.floor(diff / 60000);
+                        if (minutes < 1) return 'just now';
+                        return `${minutes}m ago`;
+                    } else if (diff < 86400000) { // Less than 1 day
+                        const hours = Math.floor(diff / 3600000);
+                        return `${hours}h ago`;
+                    } else if (diff < 604800000) { // Less than 1 week
+                        const days = Math.floor(diff / 86400000);
+                        return `${days}d ago`;
+                    } else {
+                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

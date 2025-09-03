@@ -5,10 +5,10 @@ This document provides context for Claude Code when working on this monitoring d
 ## Project Overview
 
 This is a **comprehensive monitoring and analytics dashboard** for Claude Code activities. It features:
-- **Subagent tracking**: Detailed monitoring of Task tool (subagent) invocations
 - **Complete event tracking**: ALL tools and session events via `all_events` table
 - **Session context**: Working directory and tmux session tracking
-- **Real-time visualization**: Multiple web UI pages for different views
+- **Agent (subagent) tracking**: Detailed monitoring of Task tool invocations
+- **Real-time visualization**: Simplified web UI with comprehensive data views
 
 ## Current Setup Status
 
@@ -24,12 +24,9 @@ This is a **comprehensive monitoring and analytics dashboard** for Claude Code a
 - **URL**: http://localhost:8090
 - **Start server**: `python web-ui/app.py`
 - **Pages**:
-  - `/` - Main dashboard with summary stats
-  - `/sessions` - All sessions with pagination (subagent-focused)
-  - `/session/<id>` - Detailed session timeline (subagent-focused)
-  - `/subagents` - Subagent performance analytics
-  - `/tracking` - Current session comprehensive tracking
-  - `/all-tracking` - ALL sessions with full context and timeline
+  - `/` - Comprehensive view of ALL sessions with full context and timeline
+  - `/session-timeline/<session_id>` - Detailed timeline for a specific session
+  - `/agent/<agent_type>` - Detailed information for a specific agent
 
 ## Quick Commands
 
@@ -102,8 +99,10 @@ claude-logging/
 │   └── all_events.log       # All events text log
 ├── web-ui/
 │   ├── app.py               # Flask backend
-│   ├── templates/           # HTML templates (6 pages)
-│   └── static/              # JavaScript
+│   └── templates/           # HTML templates (3 pages)
+│       ├── all_tracking.html    # Main dashboard
+│       ├── session_timeline.html # Session details
+│       └── agent_detail.html    # Agent statistics
 └── CLAUDE.md               # This file
 ```
 
@@ -131,15 +130,15 @@ Two tables for different tracking needs:
 - `data` (JSON) - Full event payload with session context
 
 ### API Endpoints
-All endpoints return JSON:
-- `/api/summary` - Overall statistics
-- `/api/sessions` - Paginated session list
-- `/api/session/<id>` - Session details
-- `/api/subagents` - Subagent metrics
-- `/api/subagent/<type>` - Individual subagent stats
-- `/api/tracking/current-session` - Current session comprehensive data
+All endpoints return JSON and use the comprehensive `all_events` table:
 - `/api/tracking/all-sessions` - All sessions with context
+- `/api/tracking/current-session` - Current session comprehensive data
 - `/api/tracking/session/<id>/timeline` - Full timeline for any session
+- `/api/tracking/agents` - Agent (subagent) usage statistics
+- `/api/agent/<agent_type>` - Detailed statistics for a specific agent
+- `/api/tracking/active-sessions` - Currently active sessions
+- `/api/tracking/stats/7days` - 7-day and 24-hour statistics
+- `/api/tracking/file-operations` - File operations from current session
 
 ## GitHub Repository
 https://github.com/emiperez95/claude-code-monitoring
