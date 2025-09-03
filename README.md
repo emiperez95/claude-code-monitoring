@@ -1,25 +1,23 @@
 # Claude Code Monitoring Dashboard
 
-Real-time monitoring and analytics dashboard for Claude Code subagent invocations with DuckDB storage and web UI.
+Comprehensive monitoring and analytics dashboard for all Claude Code activities with DuckDB storage and simplified web UI.
 
 ## Features
 
 ### 📊 Web Dashboard
-- **Real-time monitoring** of Claude Code events
-- **Session tracking** with detailed timeline views
-- **Subagent performance metrics** and analytics
-- **Comprehensive event tracking** for ALL tools and events
-- **Session context display** (working directory, tmux session)
-- **Auto-refresh** capabilities
+- **Comprehensive event tracking** for ALL tools and session events
+- **Session tracking** with detailed timeline views and context (cwd, tmux)
+- **Agent (subagent) performance metrics** with execution time distribution
+- **Real-time monitoring** with auto-refresh capabilities
+- **Simplified interface** focused on comprehensive tracking
 
 ### 🪝 Event Capture
-- **Dual tracking system**:
-  - `claude_events` table: Focused subagent (Task tool) tracking
-  - `all_events` table: Comprehensive tracking of ALL tools and events
+- **Comprehensive tracking** via `all_events` table for ALL tools and events
 - Captures `PreToolUse`, `PostToolUse`, `SessionStart`, `SessionEnd`, `SubagentStop` events
 - Records full context including prompts, responses, and metadata
 - **Session context**: Working directory and tmux session name
 - Dual storage: DuckDB for analytics + text logs for redundancy
+- Legacy `claude_events` table maintained for backward compatibility
 
 ### 📈 Analytics
 - Session duration and token usage tracking
@@ -139,56 +137,36 @@ claude-code-monitoring/
 ├── web-ui/
 │   ├── app.py               # Flask backend
 │   ├── requirements.txt     # Python dependencies
-│   ├── static/
-│   │   └── dashboard.js     # Frontend JavaScript
 │   └── templates/
-│       ├── index.html           # Main dashboard
-│       ├── session_detail.html  # Subagent session detail
-│       ├── sessions.html        # All sessions list
-│       ├── subagents.html       # Subagent analytics
-│       ├── tracking.html        # Current session tracking
-│       └── all_tracking.html    # All sessions with timeline
-└── telemetry.md            # OpenTelemetry setup guide
+│       ├── all_tracking.html    # Main dashboard (comprehensive view)
+│       ├── session_timeline.html # Detailed session timeline
+│       └── agent_detail.html    # Agent performance analytics
+├── telemetry.md            # OpenTelemetry setup guide
+└── CLAUDE.md               # Project context for Claude Code
 ```
 
 ## Web UI Pages
 
-### Dashboard (`/`)
-- Summary statistics cards
-- Recent events feed
-- Top subagent performance table
-- Recent sessions overview
-
-### Sessions (`/sessions`)
-- Full session history with pagination
-- Sortable by date, duration, events, or agents
-- Quick access to session details
-- Aggregate statistics
-
-### Session Detail (`/session/<id>`)
-- Complete event timeline
-- Expandable prompts and responses
-- Performance metrics per subagent
-- Token usage breakdown
-
-### Subagents (`/subagents`)
-- Grid view of all subagents
-- Performance statistics
-- Recent invocation history
-- Min/avg/max response times
-
-### Session Tracking (`/tracking`)
-- Real-time monitoring of current session
-- Tool usage statistics
-- File operations monitor
-- Event timeline with auto-refresh
-
-### All Sessions Tracking (`/all-tracking`)
-- Overview of ALL sessions with context
-- Shows working directory and tmux session
+### Main Dashboard (`/`)
+- **Comprehensive session overview** with context (cwd, tmux)
+- **Summary statistics** for 7-day and 24-hour periods
+- **All sessions list** with status tracking
+- **Agent usage patterns** and performance metrics
+- **Active sessions monitor** with real-time updates
 - Click any session for detailed timeline
-- Collapsible details for edit operations
-- Raw JSON data viewer
+
+### Session Timeline (`/session-timeline/<id>`)
+- **Complete event timeline** for any session
+- **Tool usage breakdown** with Pre/Post event merging
+- **Collapsible details** for edit operations
+- **Raw JSON viewer** for deep inspection
+- **Session metadata** display
+
+### Agent Detail (`/agent/<type>`)
+- **Performance range** (min, median, p95, max)
+- **Recent invocations** with descriptions
+- **Sessions using this agent**
+- **Usage statistics** and trends
 
 ## Database Schema
 
@@ -258,16 +236,16 @@ ORDER BY MAX(timestamp) DESC;
 
 ### API Endpoints
 
-- `GET /api/summary` - Overall statistics
-- `GET /api/subagents` - Subagent performance metrics
-- `GET /api/sessions` - Session list with pagination
-- `GET /api/session/<id>` - Detailed session data
-- `GET /api/subagent/<type>` - Individual subagent analytics
-- `GET /api/recent-events` - Recent event stream
-- `GET /api/tracking/current-session` - Current session comprehensive data
+All endpoints use the comprehensive `all_events` table:
+
 - `GET /api/tracking/all-sessions` - All sessions with context (cwd, tmux)
+- `GET /api/tracking/current-session` - Current session comprehensive data
 - `GET /api/tracking/session/<id>/timeline` - Full timeline for any session
-- `GET /api/tracking/file-operations` - Recent file operations
+- `GET /api/tracking/agents` - Agent (subagent) usage statistics
+- `GET /api/agent/<agent_type>` - Detailed statistics for a specific agent
+- `GET /api/tracking/active-sessions` - Currently active sessions
+- `GET /api/tracking/stats/7days` - 7-day and 24-hour statistics
+- `GET /api/tracking/file-operations` - File operations from current session
 
 ## OpenTelemetry Integration
 

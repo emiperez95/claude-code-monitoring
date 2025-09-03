@@ -14,11 +14,11 @@ This is a **comprehensive monitoring and analytics dashboard** for Claude Code a
 
 ### ✅ Monitoring Active
 - Hooks are configured in `~/.claude/settings.json`
-- **Two tracking systems**:
-  - **Subagent-focused**: `claude_events` table + `logs/subagent.log`
-  - **Comprehensive**: `all_events` table + `logs/all_events.log`
+- **Primary tracking system**: `all_events` table + `logs/all_events.log`
+  - Comprehensive tracking of ALL tools and events
+  - Session context: Working directory (`cwd`) and tmux session name
+- **Legacy system**: `claude_events` table + `logs/subagent.log` (maintained for compatibility)
 - Capturing: `PreToolUse`, `PostToolUse`, `SessionStart`, `SessionEnd`, `SubagentStop` events
-- **Session context captured**: Working directory (`cwd`) and tmux session name
 
 ### 📊 Web Dashboard
 - **URL**: http://localhost:8090
@@ -142,6 +142,12 @@ All endpoints return JSON and use the comprehensive `all_events` table:
 
 ## GitHub Repository
 https://github.com/emiperez95/claude-code-monitoring
+
+## Recent Improvements
+
+- **Simplified UI**: Removed redundant pages, now using only comprehensive tracking
+- **Fixed performance metrics**: Agent duration data now properly extracted from PostToolUse events
+- **Direct routing**: Main dashboard served at root URL (`/`) without redirects
 
 ## Known Limitations
 
