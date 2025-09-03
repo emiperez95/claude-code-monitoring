@@ -396,6 +396,143 @@ def get_all_sessions_tracking():
         'duration_seconds': (row[2] - row[1]).total_seconds() if row[1] and row[2] else None
     } for row in sessions])
 
+@app.route('/api/tracking/stats/7days')
+def get_seven_day_stats():
+    """Get statistics for the last 7 days and 24 hours"""
+    conn = duckdb.connect(DB_PATH, read_only=True)
+    
+    # Get 7-day stats
+    stats_7d = conn.execute("""
+        WITH last_7_days AS (
+            SELECT *
+            FROM all_events
+            WHERE timestamp >= CURRENT_TIMESTAMP - INTERVAL '7 days'
+        )
+        SELECT 
+            COUNT(*) as total_events,
+            COUNT(DISTINCT json_extract_string(data, '$.tmux_session')) FILTER (
+                WHERE json_extract_string(data, '$.tmux_session') IS NOT NULL 
+                AND json_extract_string(data, '$.tmux_session') != ''
+            ) as unique_tmux_sessions,
+            COUNT(DISTINCT json_extract_string(data, '$.tool_input.subagent_type')) FILTER (
+                WHERE event_type = 'PreToolUse' 
+                AND json_extract_string(data, '$.tool_name') = 'Task'
+                AND json_extract_string(data, '$.tool_input.subagent_type') IS NOT NULL
+            ) as unique_agents
+        FROM last_7_days
+    """).fetchone()
+    
+    # Get 24-hour stats
+    stats_24h = conn.execute("""
+        WITH last_24_hours AS (
+            SELECT *
+            FROM all_events
+            WHERE timestamp >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
+        )
+        SELECT 
+            COUNT(*) as total_events,
+            COUNT(DISTINCT json_extract_string(data, '$.tmux_session')) FILTER (
+                WHERE json_extract_string(data, '$.tmux_session') IS NOT NULL 
+                AND json_extract_string(data, '$.tmux_session') != ''
+            ) as unique_tmux_sessions,
+            COUNT(DISTINCT json_extract_string(data, '$.tool_input.subagent_type')) FILTER (
+                WHERE event_type = 'PreToolUse' 
+                AND json_extract_string(data, '$.tool_name') = 'Task'
+                AND json_extract_string(data, '$.tool_input.subagent_type') IS NOT NULL
+            ) as unique_agents
+        FROM last_24_hours
+    """).fetchone()
+    
+    conn.close()
+    
+    return jsonify({
+        'total_events_7d': stats_7d[0] if stats_7d else 0,
+        'unique_tmux_sessions_7d': stats_7d[1] if stats_7d else 0,
+        'unique_agents_7d': stats_7d[2] if stats_7d else 0,
+        'total_events_24h': stats_24h[0] if stats_24h else 0,
+        'unique_tmux_sessions_24h': stats_24h[1] if stats_24h else 0,
+        'unique_agents_24h': stats_24h[2] if stats_24h else 0
+    })
+
+@app.route('/api/tracking/agents')
+def get_agent_statistics():
+    """Get statistics about agent (subagent) usage across all sessions"""
+    conn = duckdb.connect(DB_PATH, read_only=True)
+    
+    # Get agent usage statistics
+    agents = conn.execute("""
+        SELECT 
+            json_extract_string(data, '$.tool_input.subagent_type') as agent_type,
+            COUNT(*) as usage_count,
+            COUNT(DISTINCT json_extract_string(data, '$.session_id')) as sessions_used,
+            MIN(timestamp) as first_used,
+            MAX(timestamp) as last_used
+        FROM all_events 
+        WHERE event_type = 'PreToolUse' 
+          AND json_extract_string(data, '$.tool_name') = 'Task'
+          AND json_extract_string(data, '$.tool_input.subagent_type') IS NOT NULL
+        GROUP BY agent_type
+        ORDER BY usage_count DESC
+    """).fetchall()
+    
+    conn.close()
+    
+    return jsonify([{
+        'agent_type': row[0],
+        'usage_count': row[1],
+        'sessions_used': row[2],
+        'first_used': row[3].isoformat() if row[3] else None,
+        'last_used': row[4].isoformat() if row[4] else None
+    } for row in agents])
+
+@app.route('/api/tracking/active-sessions')
+def get_active_sessions():
+    """Get currently active sessions (sessions without SessionEnd events)"""
+    conn = duckdb.connect(DB_PATH, read_only=True)
+    
+    # Get active sessions with their details
+    active = conn.execute("""
+        WITH session_events AS (
+            SELECT 
+                json_extract_string(data, '$.session_id') as session_id,
+                MIN(timestamp) as session_start,
+                MAX(timestamp) as last_event,
+                COUNT(*) as total_events,
+                MAX(json_extract_string(data, '$.cwd')) as cwd,
+                MAX(json_extract_string(data, '$.tmux_session')) as tmux_session,
+                COUNT(*) FILTER (WHERE event_type = 'SessionEnd') as end_events
+            FROM all_events
+            WHERE json_extract_string(data, '$.session_id') IS NOT NULL
+            GROUP BY session_id
+            HAVING end_events = 0  -- Only sessions without SessionEnd
+        )
+        SELECT 
+            session_id,
+            session_start,
+            last_event,
+            total_events,
+            cwd,
+            tmux_session,
+            EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_event)) as seconds_since_last
+        FROM session_events
+        WHERE EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_event)) < 3600  -- Active within last hour
+        ORDER BY last_event DESC
+        LIMIT 10
+    """).fetchall()
+    
+    conn.close()
+    
+    return jsonify([{
+        'session_id': row[0],
+        'session_start': row[1].isoformat() if row[1] else None,
+        'last_event': row[2].isoformat() if row[2] else None,
+        'total_events': row[3],
+        'cwd': row[4],
+        'tmux_session': row[5],
+        'seconds_since_last': row[6],
+        'duration_seconds': (row[2] - row[1]).total_seconds() if row[1] and row[2] else None
+    } for row in active])
+
 @app.route('/api/tracking/session/<session_id>/timeline')
 def get_session_timeline(session_id):
     """Get detailed timeline for a specific session"""

@@ -147,53 +147,6 @@
             </div>
         </div>
         
-        <!-- Recent Events -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold text-gray-800">Recent Events</h2>
-                <button @click="loadRecentEvents()" class="text-sm text-blue-600 hover:text-blue-800">
-                    Refresh
-                </button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-gray-200">
-                            <th class="text-left py-3 px-2 font-medium text-gray-700">Timestamp</th>
-                            <th class="text-left py-3 px-2 font-medium text-gray-700">Event</th>
-                            <th class="text-left py-3 px-2 font-medium text-gray-700">Subagent</th>
-                            <th class="text-left py-3 px-2 font-medium text-gray-700">Description</th>
-                            <th class="text-right py-3 px-2 font-medium text-gray-700">Duration</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="event in recentEvents" :key="event.timestamp + event.event_type">
-                            <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                <td class="py-3 px-2 text-gray-700" x-text="formatTime(event.timestamp)"></td>
-                                <td class="py-3 px-2">
-                                    <span class="px-2 py-1 text-xs rounded-full"
-                                          :class="{
-                                              'bg-blue-100 text-blue-800': event.event_type === 'pre',
-                                              'bg-green-100 text-green-800': event.event_type === 'post',
-                                              'bg-gray-100 text-gray-800': event.event_type === 'stop'
-                                          }"
-                                          x-text="event.event_type"></span>
-                                </td>
-                                <td class="py-3 px-2 text-gray-700">
-                                    <span class="font-medium" x-text="event.subagent_type || '-'"></span>
-                                </td>
-                                <td class="py-3 px-2 text-gray-700 max-w-xs truncate" :title="event.description" x-text="event.description || '-'"></td>
-                                <td class="text-right py-3 px-2 text-gray-700" x-text="event.duration_ms ? event.duration_ms.toLocaleString() + 'ms' : '-'"></td>
-                            </tr>
-                        </template>
-                        <tr x-show="recentEvents.length === 0">
-                            <td colspan="5" class="text-center py-4 text-gray-500">No events available</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        
         <!-- Auto-refresh indicator -->
         <div class="mt-4 text-center text-sm text-gray-500">
             <span x-show="autoRefresh">Auto-refresh enabled (30s)</span>

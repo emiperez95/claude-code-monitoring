@@ -2,7 +2,6 @@ function dashboard() {
     return {
         summary: { total_events: 0, unique_sessions: 0, unique_agents: 0 },
         subagents: [],
-        recentEvents: [],
         sessions: [],
         autoRefresh: true,
         refreshInterval: null,
@@ -22,7 +21,6 @@ function dashboard() {
             await Promise.all([
                 this.loadSummary(),
                 this.loadSubagents(),
-                this.loadRecentEvents(),
                 this.loadSessions()
             ]);
         },
@@ -46,17 +44,6 @@ function dashboard() {
                 }
             } catch (error) {
                 console.error('Error loading subagents:', error);
-            }
-        },
-        
-        async loadRecentEvents() {
-            try {
-                const response = await fetch('/api/recent-events?limit=20');
-                if (response.ok) {
-                    this.recentEvents = await response.json();
-                }
-            } catch (error) {
-                console.error('Error loading recent events:', error);
             }
         },
         
