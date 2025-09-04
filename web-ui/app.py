@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_from_directory
 import duckdb
 from datetime import datetime
 import json
@@ -13,6 +13,12 @@ DB_PATH = os.path.join(os.path.dirname(__file__), '../logs/claude_events.duckdb'
 def index():
     """Display comprehensive session tracking from all_events"""
     return render_template('all_tracking.html')
+
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon from static directory"""
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 # API endpoints now exclusively use the all_events table for comprehensive tracking
 
