@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tmux Sessions - Claude Events</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="tmuxSessionsPage()" x-init="init()" class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Tmux Sessions</h1>
+                <p class="text-gray-600">Overview of all tmux sessions with Claude activity</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/" class="inline-flex items-center gap-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Dashboard
+                </a>
+                <button @click="loadData()" class="inline-flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+        
+        <!-- Summary Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Total Sessions</h3>
+                <p class="text-2xl font-bold text-blue-600" x-text="totalStats.totalSessions"></p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Active</h3>
+                <p class="text-2xl font-bold text-green-600" x-text="totalStats.activeSessions"></p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Total Events</h3>
+                <p class="text-2xl font-bold text-purple-600" x-text="totalStats.totalEvents.toLocaleString()"></p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Total Time</h3>
+                <p class="text-2xl font-bold text-orange-600" x-text="formatDuration(totalStats.totalDuration)"></p>
+            </div>
+        </div>
+        
+        <!-- Tmux Sessions List -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-bold text-gray-800">Tmux Sessions</h2>
+                <p class="text-sm text-gray-600">Click on a session to view its detailed timeline and activity analysis</p>
+            </div>
+            <div class="divide-y divide-gray-200">
+                <template x-for="session in tmuxSessions" :key="session.tmux_session">
+                    <a :href="'/tmux-session/' + encodeURIComponent(session.tmux_session)" 
+                       class="block p-4 hover:bg-gray-50 transition-colors">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-semibold text-gray-900" x-text="session.tmux_session"></h3>
+                                    <span class="px-2 py-1 text-xs rounded-full"
+                                          :class="{
+                                              'bg-green-100 text-green-800': session.status === 'active',
+                                              'bg-yellow-100 text-yellow-800': session.status === 'recent',
+                                              'bg-gray-100 text-gray-600': session.status === 'inactive'
+                                          }"
+                                          x-text="session.status"></span>
+                                </div>
+                                <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                    <div>
+                                        <span class="text-gray-500">Sessions:</span>
+                                        <strong class="text-gray-900 ml-1" x-text="session.total_sessions"></strong>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Events:</span>
+                                        <strong class="text-gray-900 ml-1" x-text="session.total_events.toLocaleString()"></strong>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Duration:</span>
+                                        <strong class="text-gray-900 ml-1" x-text="formatDuration(session.total_duration_seconds)"></strong>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Avg/Session:</span>
+                                        <strong class="text-gray-900 ml-1" x-text="formatDuration(session.total_duration_seconds / session.total_sessions)"></strong>
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-xs text-gray-500">
+                                    <span x-text="formatTimeRange(session.first_activity, session.last_activity)"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </a>
+                </template>
+                <div x-show="tmuxSessions.length === 0" class="p-8 text-center text-gray-500">
+                    No tmux sessions found
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function tmuxSessionsPage() {
+            return {
+                tmuxSessions: [],
+                totalStats: {
+                    totalSessions: 0,
+                    activeSessions: 0,
+                    totalEvents: 0,
+                    totalDuration: 0
+                },
+                
+                async init() {
+                    await this.loadData();
+                },
+                
+                async loadData() {
+                    try {
+                        const response = await fetch('/api/tracking/tmux-sessions');
+                        this.tmuxSessions = await response.json();
+                        
+                        // Calculate total stats
+                        this.totalStats = {
+                            totalSessions: this.tmuxSessions.length,
+                            activeSessions: this.tmuxSessions.filter(s => s.status === 'active').length,
+                            totalEvents: this.tmuxSessions.reduce((sum, s) => sum + s.total_events, 0),
+                            totalDuration: this.tmuxSessions.reduce((sum, s) => sum + (s.total_duration_seconds || 0), 0)
+                        };
+                        
+                    } catch (error) {
+                        console.error('Error loading tmux sessions:', error);
+                    }
+                },
+                
+                formatDuration(seconds) {
+                    if (!seconds || seconds === 0) return '0s';
+                    
+                    const hours = Math.floor(seconds / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    const secs = Math.floor(seconds % 60);
+                    
+                    const parts = [];
+                    if (hours > 0) parts.push(`${hours}h`);
+                    if (minutes > 0) parts.push(`${minutes}m`);
+                    if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+                    
+                    return parts.join(' ');
+                },
+                
+                formatTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    return date.toLocaleString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                },
+                
+                formatTimeRange(start, end) {
+                    if (!start || !end) return '-';
+                    const startDate = new Date(start);
+                    const endDate = new Date(end);
+                    
+                    const formatter = new Intl.DateTimeFormat('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                    
+                    return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

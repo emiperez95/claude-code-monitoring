@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tmux Session: {{ tmux_name }} - Claude Events</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div x-data="tmuxSessionDetailPage()" x-init="init()" class="container mx-auto p-4 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">
+                    <span class="text-gray-500">Tmux:</span> 
+                    <span x-text="tmuxName"></span>
+                </h1>
+                <p class="text-gray-600">Detailed activity timeline and analysis</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/tmux-sessions" class="inline-flex items-center gap-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Tmux Sessions
+                </a>
+                <button @click="loadData()" class="inline-flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+        
+        <!-- Data Accuracy Notice -->
+        <div x-show="!hasAccurateData" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div class="flex">
+                <svg class="w-5 h-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                <div class="text-sm text-yellow-800">
+                    <strong>Note:</strong> Some sessions show estimated data (marked with ~) as they were recorded before Stop event tracking was enabled. 
+                    Only sessions with ✓ show accurate working vs waiting time.
+                </div>
+            </div>
+        </div>
+        
+        <!-- Activity Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Active Time</h3>
+                <p class="text-2xl font-bold text-green-600" x-text="formatDuration(activityStats.active_time_seconds)"></p>
+                <p class="text-xs text-gray-500 mt-1">
+                    <span x-text="Math.round(activityStats.active_percentage || 0) + '%'"></span> of total
+                </p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Waiting Time</h3>
+                <p class="text-2xl font-bold text-yellow-600" x-text="formatDuration(activityStats.waiting_time_seconds)"></p>
+                <p class="text-xs text-gray-500 mt-1">
+                    <span x-text="Math.round((100 - (activityStats.active_percentage || 0))) + '%'"></span> of total
+                </p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Longest Gap</h3>
+                <p class="text-2xl font-bold text-red-600" x-text="formatDuration(activityStats.longest_gap_seconds)"></p>
+                <p class="text-xs text-gray-500 mt-1">Maximum idle</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Avg Response</h3>
+                <p class="text-2xl font-bold text-blue-600" x-text="formatDuration(activityStats.median_gap_seconds)"></p>
+                <p class="text-xs text-gray-500 mt-1">Median gap</p>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Total Sessions</h3>
+                <p class="text-2xl font-bold text-purple-600" x-text="sessionsList.length"></p>
+                <p class="text-xs text-gray-500 mt-1">Claude sessions</p>
+            </div>
+        </div>
+        
+        <!-- Activity Timeline Chart -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-bold text-gray-800">Activity Timeline</h2>
+                <p class="text-sm text-gray-600">Visual representation of work vs waiting periods</p>
+            </div>
+            <div class="p-4">
+                <canvas id="timelineChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+        
+        <!-- Activity Distribution Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Pie Chart for Time Distribution -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b border-gray-200">
+                    <h2 class="text-lg font-bold text-gray-800">Time Distribution</h2>
+                    <p class="text-sm text-gray-600">Active vs waiting time breakdown</p>
+                </div>
+                <div class="p-4">
+                    <canvas id="pieChart" width="200" height="200"></canvas>
+                </div>
+            </div>
+            
+            <!-- Bar Chart for Gap Distribution -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="p-4 border-b border-gray-200">
+                    <h2 class="text-lg font-bold text-gray-800">Gap Distribution</h2>
+                    <p class="text-sm text-gray-600">Frequency of different gap durations</p>
+                </div>
+                <div class="p-4">
+                    <canvas id="gapChart" width="200" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Claude Sessions Table -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-bold text-gray-800">Claude Sessions</h2>
+                <p class="text-sm text-gray-600">Individual Claude sessions within this tmux session</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session ID</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Events</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <template x-for="session in sessionsList" :key="session.session_id">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-mono text-xs text-gray-600" 
+                                              x-text="session.session_id.substring(0, 8) + '...'"></span>
+                                        <span x-show="session.has_accurate_data" 
+                                              class="px-1.5 py-0.5 text-xs bg-green-100 text-green-800 rounded"
+                                              title="Accurate data from Stop events">✓</span>
+                                        <span x-show="!session.has_accurate_data" 
+                                              class="px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded"
+                                              title="Estimated from gaps">~</span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-900" x-text="formatTime(session.start_time)"></td>
+                                <td class="px-4 py-3 text-sm text-gray-900" x-text="formatTime(session.end_time)"></td>
+                                <td class="px-4 py-3 text-sm text-gray-900" x-text="formatDuration(session.duration_seconds)"></td>
+                                <td class="px-4 py-3 text-sm text-gray-900" x-text="session.event_count"></td>
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-20 bg-gray-200 rounded-full h-2">
+                                            <div class="h-2 rounded-full" 
+                                                 :class="session.has_accurate_data ? 'bg-green-500' : 'bg-yellow-500'"
+                                                 :style="'width: ' + (session.activity_percentage || 50) + '%'"></div>
+                                        </div>
+                                        <span class="text-xs"
+                                              :class="session.has_accurate_data ? 'text-gray-600' : 'text-gray-400'"
+                                              x-text="Math.round(session.activity_percentage || 50) + '%'"></span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <a :href="'/session-timeline/' + session.session_id" 
+                                       class="text-blue-600 hover:text-blue-800 text-sm">View</a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Significant Gaps -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="p-4 border-b border-gray-200">
+                <h2 class="text-lg font-bold text-gray-800">Significant Idle Periods</h2>
+                <p class="text-sm text-gray-600">Gaps longer than 60 seconds indicating waiting for user input</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Before Tool</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">After Tool</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <template x-for="gap in significantGaps.slice(0, 20)" :key="gap.gap_start">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 text-sm text-gray-900" x-text="formatTime(gap.gap_start)"></td>
+                                <td class="px-4 py-3 text-sm text-gray-900" x-text="formatTime(gap.gap_end)"></td>
+                                <td class="px-4 py-3 text-sm">
+                                    <span class="font-bold" 
+                                          :class="{
+                                              'text-yellow-600': gap.gap_seconds < 300,
+                                              'text-orange-600': gap.gap_seconds >= 300 && gap.gap_seconds < 1800,
+                                              'text-red-600': gap.gap_seconds >= 1800
+                                          }"
+                                          x-text="formatDuration(gap.gap_seconds)"></span>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-gray-600" x-text="gap.last_tool || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-gray-600" x-text="gap.next_tool || '-'"></td>
+                                <td class="px-4 py-3 text-sm">
+                                    <a :href="'/session-timeline/' + gap.session_id" 
+                                       class="text-blue-600 hover:text-blue-800 font-mono text-xs"
+                                       x-text="gap.session_id.substring(0, 8) + '...'"></a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function tmuxSessionDetailPage() {
+            return {
+                tmuxName: '{{ tmux_name }}',
+                timeline: [],
+                sessionsList: [],
+                activityStats: {},
+                significantGaps: [],
+                timelineChart: null,
+                pieChart: null,
+                gapChart: null,
+                hasAccurateData: false,
+                
+                async init() {
+                    await this.loadData();
+                },
+                
+                async loadData() {
+                    try {
+                        const [timelineResponse, activityResponse] = await Promise.all([
+                            fetch(`/api/tracking/tmux-session/${encodeURIComponent(this.tmuxName)}/timeline`),
+                            fetch(`/api/tracking/tmux-session/${encodeURIComponent(this.tmuxName)}/activity`)
+                        ]);
+                        
+                        const timelineData = await timelineResponse.json();
+                        const activityData = await activityResponse.json();
+                        
+                        this.timeline = timelineData.timeline || [];
+                        this.sessionsList = timelineData.sessions || [];
+                        
+                        // Calculate activity percentage and data accuracy for each session
+                        if (activityData.activity_summary && activityData.activity_summary.length > 0) {
+                            const activityMap = {};
+                            const accuracyMap = {};
+                            activityData.activity_summary.forEach(summary => {
+                                activityMap[summary.session_id] = summary.active_percentage;
+                                accuracyMap[summary.session_id] = summary.has_accurate_data || false;
+                            });
+                            
+                            this.sessionsList = this.sessionsList.map(sess => ({
+                                ...sess,
+                                activity_percentage: activityMap[sess.session_id] || 50,
+                                has_accurate_data: accuracyMap[sess.session_id] || false
+                            }));
+                            
+                            // Check if any session has accurate data
+                            this.hasAccurateData = this.sessionsList.some(sess => sess.has_accurate_data);
+                            
+                            // Aggregate stats
+                            const summaries = activityData.activity_summary;
+                            this.activityStats = {
+                                active_time_seconds: summaries.reduce((sum, s) => sum + (s.active_time_seconds || 0), 0),
+                                waiting_time_seconds: summaries.reduce((sum, s) => sum + (s.waiting_time_seconds || 0), 0),
+                                longest_gap_seconds: Math.max(...summaries.map(s => s.longest_gap_seconds || 0)),
+                                median_gap_seconds: summaries[0]?.median_gap_seconds || 0,
+                                active_periods: summaries.reduce((sum, s) => sum + (s.active_periods || 0), 0),
+                                idle_periods: summaries.reduce((sum, s) => sum + (s.idle_periods || 0), 0),
+                                short_waits: summaries.reduce((sum, s) => sum + (s.short_waits || 0), 0),
+                                medium_waits: summaries.reduce((sum, s) => sum + (s.medium_waits || 0), 0),
+                                long_waits: summaries.reduce((sum, s) => sum + (s.long_waits || 0), 0)
+                            };
+                            
+                            const totalTime = this.activityStats.active_time_seconds + this.activityStats.waiting_time_seconds;
+                            if (totalTime > 0) {
+                                this.activityStats.active_percentage = (this.activityStats.active_time_seconds / totalTime) * 100;
+                            }
+                        }
+                        
+                        this.significantGaps = activityData.significant_gaps || [];
+                        
+                        // Draw charts
+                        this.drawTimelineChart();
+                        this.drawPieChart();
+                        this.drawGapChart();
+                        
+                    } catch (error) {
+                        console.error('Error loading session timeline:', error);
+                    }
+                },
+                
+                drawTimelineChart() {
+                    const ctx = document.getElementById('timelineChart');
+                    if (!ctx) return;
+                    
+                    // Destroy existing chart
+                    if (this.timelineChart) {
+                        this.timelineChart.destroy();
+                    }
+                    
+                    // Prepare data for timeline
+                    const datasets = [];
+                    
+                    this.sessionsList.forEach((session, index) => {
+                        // Find events for this session
+                        const sessionEvents = this.timeline.filter(e => e.session_id === session.session_id);
+                        
+                        const activeSegments = [];
+                        const waitingSegments = [];
+                        
+                        sessionEvents.forEach((event, i) => {
+                            if (event.next_timestamp) {
+                                const startTime = new Date(event.timestamp).getTime();
+                                const endTime = new Date(event.next_timestamp).getTime();
+                                
+                                const segment = {
+                                    x: [startTime, endTime],
+                                    y: index
+                                };
+                                
+                                if (event.activity_state === 'active' || event.activity_state === 'idle') {
+                                    activeSegments.push(segment);
+                                } else {
+                                    waitingSegments.push(segment);
+                                }
+                            }
+                        });
+                        
+                        // Add active segments
+                        if (activeSegments.length > 0) {
+                            datasets.push({
+                                label: 'Active',
+                                data: activeSegments,
+                                backgroundColor: '#10b981',
+                                borderColor: '#10b981',
+                                borderWidth: 0,
+                                barThickness: 15
+                            });
+                        }
+                        
+                        // Add waiting segments
+                        if (waitingSegments.length > 0) {
+                            datasets.push({
+                                label: 'Waiting',
+                                data: waitingSegments,
+                                backgroundColor: '#f59e0b',
+                                borderColor: '#f59e0b',
+                                borderWidth: 0,
+                                barThickness: 15
+                            });
+                        }
+                    });
+                    
+                    // Create timeline chart
+                    this.timelineChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: { datasets },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        displayFormats: {
+                                            hour: 'HH:mm',
+                                            minute: 'HH:mm'
+                                        }
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Time'
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Sessions'
+                                    },
+                                    ticks: {
+                                        callback: (value, index) => {
+                                            return this.sessionsList[index] 
+                                                ? this.sessionsList[index].session_id.substring(0, 8) 
+                                                : '';
+                                        }
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    position: 'top'
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const duration = (context.raw.x[1] - context.raw.x[0]) / 1000;
+                                            return `${context.dataset.label}: ${this.formatDuration(duration)}`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                },
+                
+                drawPieChart() {
+                    const ctx = document.getElementById('pieChart');
+                    if (!ctx) return;
+                    
+                    if (this.pieChart) {
+                        this.pieChart.destroy();
+                    }
+                    
+                    this.pieChart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Active Time', 'Waiting Time'],
+                            datasets: [{
+                                data: [
+                                    this.activityStats.active_time_seconds || 0,
+                                    this.activityStats.waiting_time_seconds || 0
+                                ],
+                                backgroundColor: ['#10b981', '#f59e0b'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const label = context.label || '';
+                                            const value = this.formatDuration(context.parsed);
+                                            const percentage = Math.round((context.parsed / (this.activityStats.active_time_seconds + this.activityStats.waiting_time_seconds)) * 100);
+                                            return `${label}: ${value} (${percentage}%)`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                },
+                
+                drawGapChart() {
+                    const ctx = document.getElementById('gapChart');
+                    if (!ctx) return;
+                    
+                    if (this.gapChart) {
+                        this.gapChart.destroy();
+                    }
+                    
+                    this.gapChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Active (≤5s)', 'Idle (5-30s)', 'Short Wait (30s-5m)', 'Medium Wait (5-30m)', 'Long Wait (>30m)'],
+                            datasets: [{
+                                label: 'Count',
+                                data: [
+                                    this.activityStats.active_periods || 0,
+                                    this.activityStats.idle_periods || 0,
+                                    this.activityStats.short_waits || 0,
+                                    this.activityStats.medium_waits || 0,
+                                    this.activityStats.long_waits || 0
+                                ],
+                                backgroundColor: ['#10b981', '#84cc16', '#fbbf24', '#fb923c', '#ef4444']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                },
+                
+                formatDuration(seconds) {
+                    if (!seconds || seconds === 0) return '0s';
+                    
+                    const hours = Math.floor(seconds / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    const secs = Math.floor(seconds % 60);
+                    
+                    const parts = [];
+                    if (hours > 0) parts.push(`${hours}h`);
+                    if (minutes > 0) parts.push(`${minutes}m`);
+                    if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+                    
+                    return parts.join(' ');
+                },
+                
+                formatTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    return date.toLocaleString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

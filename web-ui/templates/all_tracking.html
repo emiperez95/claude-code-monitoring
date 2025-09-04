@@ -16,6 +16,12 @@
                 <p class="text-gray-600">Complete overview of all Claude Code sessions</p>
             </div>
             <div class="flex items-center gap-3">
+                <a href="/tmux-sessions" class="inline-flex items-center gap-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                    </svg>
+                    Tmux Timeline
+                </a>
                 <button @click="loadData()" class="inline-flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -154,6 +160,17 @@
                                 <div class="text-xs text-gray-600">
                                     <div class="truncate" :title="session.cwd" x-text="'📁 ' + (session.cwd?.split('/').slice(-2).join('/') || 'Unknown')"></div>
                                     <div class="mt-1 text-green-600" x-text="'● Active ' + formatRelativeTime(session.last_event)"></div>
+                                    <div x-show="session.agents_used && session.agents_used.length > 0" class="mt-1">
+                                        <template x-for="agent in session.agents_used.slice(0, 2)" :key="agent">
+                                            <div class="text-xs truncate" 
+                                                 :class="getAgentTextColorClass(agent)"
+                                                 :title="agent"
+                                                 x-text="agent"></div>
+                                        </template>
+                                        <span x-show="session.agents_used.length > 2" class="text-xs text-gray-500">
+                                            +<span x-text="session.agents_used.length - 2"></span> more
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </template>
@@ -178,6 +195,7 @@
                             <th class="text-left py-3 px-4 font-medium text-gray-700">Session</th>
                             <th class="text-left py-3 px-4 font-medium text-gray-700">Working Directory</th>
                             <th class="text-left py-3 px-4 font-medium text-gray-700">Tmux</th>
+                            <th class="text-left py-3 px-4 font-medium text-gray-700">Agents Used</th>
                             <th class="text-left py-3 px-4 font-medium text-gray-700">Start Time</th>
                             <th class="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                             <th class="text-right py-3 px-4 font-medium text-gray-700">Duration</th>
@@ -198,6 +216,19 @@
                                 <td class="py-3 px-4">
                                     <span x-show="session.tmux_session" class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded" x-text="session.tmux_session"></span>
                                     <span x-show="!session.tmux_session" class="text-xs text-gray-400">-</span>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <div class="flex flex-wrap gap-1" x-show="session.agents_used && session.agents_used.length > 0">
+                                        <template x-for="(agent, index) in session.agents_used" :key="agent + index">
+                                            <span class="inline-flex items-center gap-0.5 px-2 py-1 text-xs rounded font-medium"
+                                                  :class="getAgentColorClass(agent)"
+                                                  :title="agent">
+                                                <span x-text="agent"></span>
+                                                <span x-show="index < session.agents_used.length - 1" class="text-gray-500 ml-1">→</span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                    <span x-show="!session.agents_used || session.agents_used.length === 0" class="text-xs text-gray-400">-</span>
                                 </td>
                                 <td class="py-3 px-4">
                                     <div class="text-xs" x-text="formatDateTime(session.session_start)"></div>
@@ -322,6 +353,57 @@
                     } else {
                         return 'bg-gray-100 text-gray-800';
                     }
+                },
+                
+                getAgentTextColorClass(agentType) {
+                    // Text-only colors for compact display
+                    if (agentType.includes('pr') || agentType.includes('PR')) {
+                        return 'text-purple-700 font-medium';
+                    } else if (agentType.includes('review')) {
+                        return 'text-blue-700 font-medium';
+                    } else if (agentType.includes('jira') || agentType.includes('atlas')) {
+                        return 'text-green-700 font-medium';
+                    } else if (agentType.includes('test')) {
+                        return 'text-yellow-700 font-medium';
+                    } else if (agentType.includes('security')) {
+                        return 'text-red-700 font-medium';
+                    } else if (agentType.includes('doc')) {
+                        return 'text-indigo-700 font-medium';
+                    } else {
+                        return 'text-gray-700 font-medium';
+                    }
+                },
+                
+                getAgentShortName(agentType) {
+                    // Create short names for agents to save space
+                    const shortNames = {
+                        'athena-pr-reviewer': 'PR-Review',
+                        'hermes-pr-courier': 'PR-Courier',
+                        'heimdall-pr-guardian': 'PR-Guard',
+                        'atlas-jira-analyst': 'JIRA',
+                        'jira-analyst': 'JIRA',
+                        'minerva-notion-oracle': 'Notion',
+                        'test-validator': 'Test-Val',
+                        'test-developer': 'Test-Dev',
+                        'security-reviewer': 'Security',
+                        'performance-reviewer': 'Perf',
+                        'maintainability-reviewer': 'Maint',
+                        'doc-generator': 'Docs',
+                        'changelog-writer': 'Changelog',
+                        'architect': 'Arch',
+                        'backend-developer': 'Backend',
+                        'frontend-developer': 'Frontend',
+                        'database-developer': 'Database',
+                        'context-analyzer': 'Context',
+                        'requirements-clarifier': 'Reqs',
+                        'pr-creator': 'PR-Create',
+                        'story-analyzer': 'Story',
+                        'agent-discoverer': 'Discover',
+                        'task-planner': 'Planner',
+                        'duplication-checker': 'DupCheck'
+                    };
+                    
+                    return shortNames[agentType] || agentType.split('-')[0];
                 },
                 
                 formatRelativeTime(timestamp) {
