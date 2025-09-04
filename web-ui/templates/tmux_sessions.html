@@ -54,23 +54,69 @@
             </div>
         </div>
         
-        <!-- Summary Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Total Sessions</h3>
-                <p class="text-2xl font-bold text-blue-600" x-text="totalStats.totalSessions"></p>
+        <!-- Summary Cards - Same style as home screen -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-gray-600 text-sm font-medium uppercase tracking-wider">Total Events</h2>
+                    <div class="text-blue-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex items-end justify-between">
+                    <div class="flex-1">
+                        <p class="text-2xl font-bold text-gray-900" x-text="stats.total_events_7d?.toLocaleString() || '0'">-</p>
+                        <p class="text-xs text-gray-500">7 days</p>
+                    </div>
+                    <div class="flex-1 text-right border-l border-gray-200 pl-4">
+                        <p class="text-xl font-semibold text-gray-700" x-text="stats.total_events_24h?.toLocaleString() || '0'">-</p>
+                        <p class="text-xs text-gray-500">24 hours</p>
+                    </div>
+                </div>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Active</h3>
-                <p class="text-2xl font-bold text-green-600" x-text="totalStats.activeSessions"></p>
+            
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-gray-600 text-sm font-medium uppercase tracking-wider">Tmux Sessions</h2>
+                    <div class="text-purple-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex items-end justify-between">
+                    <div class="flex-1">
+                        <p class="text-2xl font-bold text-gray-900" x-text="stats.unique_tmux_sessions_7d || '0'">-</p>
+                        <p class="text-xs text-gray-500">7 days</p>
+                    </div>
+                    <div class="flex-1 text-right border-l border-gray-200 pl-4">
+                        <p class="text-xl font-semibold text-gray-700" x-text="stats.unique_tmux_sessions_24h || '0'">-</p>
+                        <p class="text-xs text-gray-500">24 hours</p>
+                    </div>
+                </div>
             </div>
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Total Events</h3>
-                <p class="text-2xl font-bold text-purple-600" x-text="totalStats.totalEvents.toLocaleString()"></p>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Total Time</h3>
-                <p class="text-2xl font-bold text-orange-600" x-text="formatDuration(totalStats.totalDuration)"></p>
+            
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-gray-600 text-sm font-medium uppercase tracking-wider">Unique Agents</h2>
+                    <div class="text-green-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex items-end justify-between">
+                    <div class="flex-1">
+                        <p class="text-2xl font-bold text-gray-900" x-text="stats.unique_agents_7d || '0'">-</p>
+                        <p class="text-xs text-gray-500">7 days</p>
+                    </div>
+                    <div class="flex-1 text-right border-l border-gray-200 pl-4">
+                        <p class="text-xl font-semibold text-gray-700" x-text="stats.unique_agents_24h || '0'">-</p>
+                        <p class="text-xs text-gray-500">24 hours</p>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -137,11 +183,13 @@
         function tmuxSessionsPage() {
             return {
                 tmuxSessions: [],
-                totalStats: {
-                    totalSessions: 0,
-                    activeSessions: 0,
-                    totalEvents: 0,
-                    totalDuration: 0
+                stats: { 
+                    total_events_7d: 0, 
+                    unique_tmux_sessions_7d: 0, 
+                    unique_agents_7d: 0,
+                    total_events_24h: 0,
+                    unique_tmux_sessions_24h: 0,
+                    unique_agents_24h: 0
                 },
                 
                 async init() {
@@ -150,19 +198,17 @@
                 
                 async loadData() {
                     try {
-                        const response = await fetch('/api/tracking/tmux-sessions');
-                        this.tmuxSessions = await response.json();
+                        // Load both tmux sessions and stats in parallel
+                        const [sessionsResponse, statsResponse] = await Promise.all([
+                            fetch('/api/tracking/tmux-sessions'),
+                            fetch('/api/tracking/stats/7days')
+                        ]);
                         
-                        // Calculate total stats
-                        this.totalStats = {
-                            totalSessions: this.tmuxSessions.length,
-                            activeSessions: this.tmuxSessions.filter(s => s.status === 'active').length,
-                            totalEvents: this.tmuxSessions.reduce((sum, s) => sum + s.total_events, 0),
-                            totalDuration: this.tmuxSessions.reduce((sum, s) => sum + (s.total_duration_seconds || 0), 0)
-                        };
+                        this.tmuxSessions = await sessionsResponse.json();
+                        this.stats = await statsResponse.json();
                         
                     } catch (error) {
-                        console.error('Error loading tmux sessions:', error);
+                        console.error('Error loading data:', error);
                     }
                 },
                 
