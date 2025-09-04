@@ -89,6 +89,58 @@
             </div>
         </div>
         
+        <!-- Activity Timeline Bar -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="mb-4">
+                <h2 class="text-xl font-semibold text-gray-800 mb-2">Activity Timeline</h2>
+                <p class="text-sm text-gray-600">Visual representation of active and inactive periods throughout the session</p>
+            </div>
+            
+            <!-- Timeline Bar -->
+            <div class="relative">
+                <!-- Time labels -->
+                <div class="flex justify-between text-xs text-gray-500 mb-2">
+                    <span x-text="formatTime(sessionInfo?.session_start)">Start</span>
+                    <span x-text="formatTime(sessionInfo?.session_end)">End</span>
+                </div>
+                
+                <!-- Timeline bar container -->
+                <div class="relative h-12 bg-gray-100 rounded-lg overflow-hidden">
+                    <!-- Render activity segments -->
+                    <template x-for="segment in activitySegments" :key="segment.id">
+                        <div 
+                            class="absolute h-full transition-all duration-200 hover:opacity-80"
+                            :class="segment.type === 'active' ? 'bg-green-500' : (segment.type === 'idle' ? 'bg-yellow-400' : 'bg-gray-300')"
+                            :style="`left: ${segment.leftPercent}%; width: ${segment.widthPercent}%`"
+                            :title="`${segment.type.charAt(0).toUpperCase() + segment.type.slice(1)}: ${formatDuration(segment.duration)} (${segment.tool || 'No activity'})`">
+                        </div>
+                    </template>
+                    
+                    <!-- If no segments, show empty state -->
+                    <div x-show="!activitySegments || activitySegments.length === 0" 
+                         class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
+                        No timeline data available
+                    </div>
+                </div>
+                
+                <!-- Legend -->
+                <div class="flex gap-4 mt-3 text-xs">
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 bg-green-500 rounded"></div>
+                        <span>Active (working)</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 bg-yellow-400 rounded"></div>
+                        <span>Idle (short wait)</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 bg-gray-300 rounded"></div>
+                        <span>Waiting (user input)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Agent Execution Timeline -->
         <div x-show="agentTimeline && agentTimeline.agents.length > 0" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
             <div class="mb-4">
@@ -427,6 +479,7 @@
                 sessionInfo: null,
                 timeline: [],
                 filteredTimeline: [],
+                activitySegments: [],
                 showRawData: false,
                 allDetailsExpanded: false,
                 filterEventType: '',
@@ -486,11 +539,76 @@
                             const rawTimeline = await response.json();
                             this.timeline = this.mergePrePostPairs(rawTimeline);
                             this.extractAvailableTools();
+                            this.processActivitySegments(rawTimeline);
                             this.applyFilters();
                         }
                     } catch (error) {
                         console.error('Error loading timeline:', error);
                     }
+                },
+                
+                processActivitySegments(events) {
+                    if (!events || events.length === 0) {
+                        this.activitySegments = [];
+                        return;
+                    }
+                    
+                    // Get session start and end times
+                    const timestamps = events.map(e => new Date(e.timestamp).getTime()).filter(t => !isNaN(t));
+                    if (timestamps.length === 0) {
+                        this.activitySegments = [];
+                        return;
+                    }
+                    
+                    const sessionStart = Math.min(...timestamps);
+                    const sessionEnd = Math.max(...timestamps);
+                    const totalDuration = sessionEnd - sessionStart;
+                    
+                    if (totalDuration === 0) {
+                        this.activitySegments = [];
+                        return;
+                    }
+                    
+                    // Create segments based on consecutive events
+                    const segments = [];
+                    let lastEventTime = null;
+                    let segmentId = 0;
+                    
+                    for (let i = 0; i < events.length - 1; i++) {
+                        const currentEvent = events[i];
+                        const nextEvent = events[i + 1];
+                        
+                        if (!currentEvent.timestamp || !nextEvent.timestamp) continue;
+                        
+                        const currentTime = new Date(currentEvent.timestamp).getTime();
+                        const nextTime = new Date(nextEvent.timestamp).getTime();
+                        const gapDuration = (nextTime - currentTime) / 1000; // in seconds
+                        
+                        // Determine segment type based on gap duration
+                        let segmentType = 'active';
+                        if (gapDuration > 30) {
+                            segmentType = 'waiting';
+                        } else if (gapDuration > 5) {
+                            segmentType = 'idle';
+                        }
+                        
+                        // Calculate position and width as percentages
+                        const leftPercent = ((currentTime - sessionStart) / totalDuration) * 100;
+                        const widthPercent = ((nextTime - currentTime) / totalDuration) * 100;
+                        
+                        segments.push({
+                            id: segmentId++,
+                            type: segmentType,
+                            duration: gapDuration,
+                            leftPercent: Math.max(0, leftPercent),
+                            widthPercent: Math.max(0.1, widthPercent), // Minimum width for visibility
+                            tool: currentEvent.tool_name || 'Unknown',
+                            startTime: currentTime,
+                            endTime: nextTime
+                        });
+                    }
+                    
+                    this.activitySegments = segments;
                 },
                 
                 async loadAgentTimeline() {
@@ -695,6 +813,17 @@
                         const minutes = Math.floor((seconds % 3600) / 60);
                         return `${hours}h ${minutes}m`;
                     }
+                },
+                
+                formatTime(timestamp) {
+                    if (!timestamp) return '-';
+                    const date = new Date(timestamp);
+                    if (isNaN(date.getTime())) return '-';
+                    return date.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
                 },
                 
                 formatEventType(type) {
