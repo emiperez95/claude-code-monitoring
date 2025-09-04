@@ -821,26 +821,43 @@ def get_tmux_session_activity(tmux_name):
     
     # Add stop-based analysis (accurate)
     for row in stop_based_analysis:
+        working_seconds = row[1] or 0
+        waiting_seconds = row[2] or 0
+        
+        # For gap distribution, categorize the waiting periods
+        short_waits = 0
+        medium_waits = 0
+        long_waits = 0
+        
+        if waiting_seconds > 0:
+            # If we have waiting time, categorize it
+            if waiting_seconds <= 60:
+                short_waits = 1
+            elif waiting_seconds <= 300:
+                medium_waits = 1
+            else:
+                long_waits = 1
+        
         activity_summary.append({
             'session_id': row[0],
             'has_accurate_data': True,
             'data_source': 'stop_events',
-            'working_time_seconds': row[1] or 0,
-            'waiting_time_seconds': row[2] or 0,
+            'working_time_seconds': working_seconds,
+            'waiting_time_seconds': waiting_seconds,
             'total_time_seconds': row[3] or 0,
             'active_percentage': row[4] or 0,
             'stop_count': row[5],
             'prompt_count': row[6],
             # Legacy fields for compatibility
-            'active_time_seconds': row[1] or 0,
-            'active_periods': row[5],  # Use stop_count as periods
+            'active_time_seconds': working_seconds,
+            'active_periods': row[5] if working_seconds > 0 else 0,  # Only count if there's work
             'idle_periods': 0,
-            'short_waits': 0,
-            'medium_waits': 0,
-            'long_waits': 0,
-            'longest_gap_seconds': 0,
-            'avg_gap_seconds': 0,
-            'median_gap_seconds': 0
+            'short_waits': short_waits,
+            'medium_waits': medium_waits,
+            'long_waits': long_waits,
+            'longest_gap_seconds': waiting_seconds,
+            'avg_gap_seconds': waiting_seconds / row[5] if row[5] > 0 else 0,
+            'median_gap_seconds': waiting_seconds / row[5] if row[5] > 0 else 0
         })
     
     return jsonify({
