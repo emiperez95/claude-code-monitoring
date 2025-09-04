@@ -737,6 +737,7 @@ def get_tmux_session_activity(tmux_name):
                 ) as next_event_type
             FROM all_events
             WHERE json_extract_string(data, '$.tmux_session') = ?
+              AND event_type IN ('SessionStart', 'UserPromptSubmit', 'Stop')  -- Only relevant events for transitions
               AND json_extract_string(data, '$.session_id') IN (
                   SELECT DISTINCT json_extract_string(data, '$.session_id')
                   FROM all_events
