@@ -106,14 +106,51 @@
             </div>
         </div>
         
-        <!-- Activity Timeline Chart -->
+        <!-- Activity Timeline Summary -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
             <div class="p-4 border-b border-gray-200">
-                <h2 class="text-lg font-bold text-gray-800">Activity Timeline</h2>
-                <p class="text-sm text-gray-600">Visual representation of work vs waiting periods</p>
+                <h2 class="text-lg font-bold text-gray-800">Session Activity Overview</h2>
+                <p class="text-sm text-gray-600">Activity patterns for each Claude session</p>
             </div>
             <div class="p-4">
-                <canvas id="timelineChart" width="400" height="300"></canvas>
+                <div class="space-y-3">
+                    <template x-for="session in sessionsList" :key="session.session_id">
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="flex justify-between items-start mb-3">
+                                <div>
+                                    <span class="font-mono text-sm text-gray-600" x-text="session.session_id.substring(0, 8) + '...'"></span>
+                                    <span x-show="session.has_accurate_data" 
+                                          class="ml-2 px-1.5 py-0.5 text-xs bg-green-100 text-green-800 rounded"
+                                          title="Accurate data from Stop events">✓ Accurate</span>
+                                    <span x-show="!session.has_accurate_data" 
+                                          class="ml-2 px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded"
+                                          title="Estimated from gaps">~ Estimated</span>
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    <span x-text="formatDuration(session.duration_seconds)"></span> total
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <div class="flex justify-between text-xs text-gray-600 mb-1">
+                                    <span>Activity Distribution</span>
+                                    <span x-text="Math.round(session.activity_percentage || 50) + '% active'"></span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                    <div class="h-3 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-300" 
+                                         :style="'width: ' + (session.activity_percentage || 50) + '%'"></div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-600">
+                                <span x-text="formatTime(session.start_time)"></span>
+                                <span>→</span>
+                                <span x-text="formatTime(session.end_time)"></span>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="sessionsList.length === 0" class="text-center py-8 text-gray-500">
+                        No session data available
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -258,7 +295,6 @@
                 sessionsList: [],
                 activityStats: {},
                 significantGaps: [],
-                timelineChart: null,
                 pieChart: null,
                 gapChart: null,
                 hasAccurateData: false,
@@ -320,162 +356,13 @@
                         
                         this.significantGaps = activityData.significant_gaps || [];
                         
-                        // Draw charts
-                        this.drawTimelineChart();
+                        // Draw charts (removed timeline chart as it was replaced with session overview)
                         this.drawPieChart();
                         this.drawGapChart();
                         
                     } catch (error) {
                         console.error('Error loading session timeline:', error);
                     }
-                },
-                
-                drawTimelineChart() {
-                    const ctx = document.getElementById('timelineChart');
-                    if (!ctx) return;
-                    
-                    // Destroy existing chart
-                    if (this.timelineChart) {
-                        this.timelineChart.destroy();
-                    }
-                    
-                    // If no timeline data, show a message
-                    if (!this.timeline || this.timeline.length === 0) {
-                        ctx.getContext('2d').font = '14px sans-serif';
-                        ctx.getContext('2d').fillStyle = '#9ca3af';
-                        ctx.getContext('2d').textAlign = 'center';
-                        ctx.getContext('2d').fillText('No timeline data available', ctx.width / 2, ctx.height / 2);
-                        return;
-                    }
-                    
-                    // Prepare data for timeline - simplified approach
-                    const activeData = [];
-                    const waitingData = [];
-                    
-                    this.sessionsList.forEach((session, sessionIndex) => {
-                        // Find events for this session
-                        const sessionEvents = this.timeline.filter(e => e.session_id === session.session_id);
-                        
-                        sessionEvents.forEach(event => {
-                            if (event.next_timestamp) {
-                                const startTime = new Date(event.timestamp);
-                                const endTime = new Date(event.next_timestamp);
-                                const duration = (endTime - startTime) / 1000; // in seconds
-                                
-                                // Create a data point for this segment
-                                const dataPoint = {
-                                    x: [startTime, endTime],
-                                    y: sessionIndex,
-                                    sessionId: session.session_id.substring(0, 8),
-                                    duration: duration
-                                };
-                                
-                                if (event.activity_state === 'active' || event.activity_state === 'idle') {
-                                    activeData.push(dataPoint);
-                                } else if (event.activity_state === 'waiting') {
-                                    waitingData.push(dataPoint);
-                                }
-                            }
-                        });
-                    });
-                    
-                    // Create timeline chart with consolidated datasets
-                    this.timelineChart = new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            datasets: [
-                                {
-                                    label: 'Active',
-                                    data: activeData,
-                                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
-                                    borderColor: 'rgba(16, 185, 129, 1)',
-                                    borderWidth: 1,
-                                    barThickness: 12,
-                                    categoryPercentage: 0.8,
-                                    barPercentage: 0.9
-                                },
-                                {
-                                    label: 'Waiting',
-                                    data: waitingData,
-                                    backgroundColor: 'rgba(245, 158, 11, 0.8)',
-                                    borderColor: 'rgba(245, 158, 11, 1)',
-                                    borderWidth: 1,
-                                    barThickness: 12,
-                                    categoryPercentage: 0.8,
-                                    barPercentage: 0.9
-                                }
-                            ]
-                        },
-                        options: {
-                            indexAxis: 'y',
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            scales: {
-                                x: {
-                                    type: 'time',
-                                    time: {
-                                        displayFormats: {
-                                            hour: 'MMM d, HH:mm',
-                                            minute: 'HH:mm',
-                                            second: 'HH:mm:ss'
-                                        },
-                                        tooltipFormat: 'MMM dd, yyyy HH:mm:ss'
-                                    },
-                                    title: {
-                                        display: true,
-                                        text: 'Time'
-                                    }
-                                },
-                                y: {
-                                    type: 'linear',
-                                    title: {
-                                        display: true,
-                                        text: 'Sessions'
-                                    },
-                                    min: -0.5,
-                                    max: Math.max(this.sessionsList.length - 0.5, 0.5),
-                                    ticks: {
-                                        stepSize: 1,
-                                        callback: (value) => {
-                                            const index = Math.floor(value);
-                                            if (index >= 0 && index < this.sessionsList.length) {
-                                                return this.sessionsList[index].session_id.substring(0, 8);
-                                            }
-                                            return '';
-                                        }
-                                    }
-                                }
-                            },
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    position: 'top'
-                                },
-                                tooltip: {
-                                    callbacks: {
-                                        title: (context) => {
-                                            if (context[0]) {
-                                                const item = context[0].raw;
-                                                return `Session: ${item.sessionId}`;
-                                            }
-                                            return '';
-                                        },
-                                        label: (context) => {
-                                            const item = context.raw;
-                                            const startTime = new Date(item.x[0]).toLocaleTimeString();
-                                            const endTime = new Date(item.x[1]).toLocaleTimeString();
-                                            return [
-                                                `${context.dataset.label}`,
-                                                `Start: ${startTime}`,
-                                                `End: ${endTime}`,
-                                                `Duration: ${this.formatDuration(item.duration)}`
-                                            ];
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
                 },
                 
                 drawPieChart() {
