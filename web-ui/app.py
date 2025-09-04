@@ -717,20 +717,10 @@ def get_tmux_session_timeline(tmux_name):
 
 @app.route('/api/tracking/tmux-session/<path:tmux_name>/activity')
 def get_tmux_session_activity(tmux_name):
-    """Get activity periods and idle gaps for a tmux session"""
+    """Get activity periods and idle gaps for a tmux session - ONLY for sessions with Stop events"""
     conn = duckdb.connect(DB_PATH, read_only=True)
     
-    # Check which sessions have Stop events
-    sessions_with_stop = conn.execute("""
-        SELECT DISTINCT json_extract_string(data, '$.session_id') as session_id
-        FROM all_events
-        WHERE event_type = 'Stop'
-          AND json_extract_string(data, '$.tmux_session') = ?
-    """, [tmux_name]).fetchall()
-    
-    sessions_with_stop_set = {row[0] for row in sessions_with_stop}
-    
-    # Analyze activity patterns - for sessions WITH Stop events
+    # ONLY analyze sessions that have Stop events - no estimation
     stop_based_analysis = conn.execute("""
         WITH session_events AS (
             SELECT 
@@ -792,66 +782,6 @@ def get_tmux_session_activity(tmux_name):
         WHERE working_time_seconds IS NOT NULL OR waiting_time_seconds IS NOT NULL
     """, [tmux_name, tmux_name]).fetchall()
     
-    # Fallback gap-based analysis for sessions WITHOUT Stop events
-    gap_based_analysis = conn.execute("""
-        WITH session_events AS (
-            SELECT 
-                timestamp,
-                json_extract_string(data, '$.session_id') as session_id,
-                LEAD(timestamp) OVER (
-                    PARTITION BY json_extract_string(data, '$.session_id') 
-                    ORDER BY timestamp
-                ) as next_timestamp
-            FROM all_events
-            WHERE json_extract_string(data, '$.tmux_session') = ?
-              AND json_extract_string(data, '$.session_id') NOT IN (
-                  SELECT DISTINCT json_extract_string(data, '$.session_id')
-                  FROM all_events
-                  WHERE event_type = 'Stop'
-                    AND json_extract_string(data, '$.tmux_session') = ?
-              )
-        ),
-        gaps AS (
-            SELECT 
-                session_id,
-                timestamp as gap_start,
-                next_timestamp as gap_end,
-                EXTRACT(EPOCH FROM (next_timestamp - timestamp)) as gap_seconds
-            FROM session_events
-            WHERE next_timestamp IS NOT NULL
-        ),
-        gap_categories AS (
-            SELECT 
-                session_id,
-                COUNT(*) FILTER (WHERE gap_seconds <= 5) as active_periods,
-                COUNT(*) FILTER (WHERE gap_seconds > 5 AND gap_seconds <= 30) as idle_periods,
-                COUNT(*) FILTER (WHERE gap_seconds > 30 AND gap_seconds <= 300) as short_waits,
-                COUNT(*) FILTER (WHERE gap_seconds > 300 AND gap_seconds <= 1800) as medium_waits,
-                COUNT(*) FILTER (WHERE gap_seconds > 1800) as long_waits,
-                SUM(CASE WHEN gap_seconds <= 30 THEN gap_seconds ELSE 0 END) as active_time_seconds,
-                SUM(CASE WHEN gap_seconds > 30 THEN gap_seconds ELSE 0 END) as waiting_time_seconds,
-                MAX(gap_seconds) as longest_gap_seconds,
-                AVG(gap_seconds) as avg_gap_seconds,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY gap_seconds) as median_gap_seconds
-            FROM gaps
-            GROUP BY session_id
-        )
-        SELECT 
-            session_id,
-            active_periods,
-            idle_periods,
-            short_waits,
-            medium_waits,
-            long_waits,
-            active_time_seconds,
-            waiting_time_seconds,
-            longest_gap_seconds,
-            avg_gap_seconds,
-            median_gap_seconds,
-            active_time_seconds + waiting_time_seconds as total_time_seconds
-        FROM gap_categories
-        ORDER BY session_id
-    """, [tmux_name, tmux_name]).fetchall()
     
     # Get significant gaps (> 60 seconds) for visualization
     significant_gaps = conn.execute("""
@@ -886,7 +816,7 @@ def get_tmux_session_activity(tmux_name):
     
     conn.close()
     
-    # Combine both analyses
+    # Only return stop-based analysis - no estimation
     activity_summary = []
     
     # Add stop-based analysis (accurate)
@@ -903,38 +833,14 @@ def get_tmux_session_activity(tmux_name):
             'prompt_count': row[6],
             # Legacy fields for compatibility
             'active_time_seconds': row[1] or 0,
-            'active_periods': None,
-            'idle_periods': None,
-            'short_waits': None,
-            'medium_waits': None,
-            'long_waits': None,
-            'longest_gap_seconds': None,
-            'avg_gap_seconds': None,
-            'median_gap_seconds': None
-        })
-    
-    # Add gap-based analysis (estimated) for sessions without Stop events
-    for row in gap_based_analysis:
-        activity_summary.append({
-            'session_id': row[0],
-            'has_accurate_data': False,
-            'data_source': 'gap_estimation',
-            'active_periods': row[1],
-            'idle_periods': row[2],
-            'short_waits': row[3],
-            'medium_waits': row[4],
-            'long_waits': row[5],
-            'active_time_seconds': row[6],
-            'waiting_time_seconds': row[7],
-            'longest_gap_seconds': row[8],
-            'avg_gap_seconds': row[9],
-            'median_gap_seconds': row[10],
-            'total_time_seconds': row[11],
-            'active_percentage': (row[6] / row[11] * 100) if row[11] else 0,
-            # Stop-based fields not available
-            'working_time_seconds': None,
-            'stop_count': 0,
-            'prompt_count': 0
+            'active_periods': row[5],  # Use stop_count as periods
+            'idle_periods': 0,
+            'short_waits': 0,
+            'medium_waits': 0,
+            'long_waits': 0,
+            'longest_gap_seconds': 0,
+            'avg_gap_seconds': 0,
+            'median_gap_seconds': 0
         })
     
     return jsonify({

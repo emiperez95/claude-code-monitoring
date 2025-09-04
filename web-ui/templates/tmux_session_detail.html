@@ -60,21 +60,22 @@
             </div>
         </div>
         
-        <!-- Data Accuracy Notice -->
-        <div x-show="!hasAccurateData" class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <!-- No Data Notice -->
+        <div x-show="sessionsList.length === 0 || !hasAccurateData" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div class="flex">
-                <svg class="w-5 h-5 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                <svg class="w-5 h-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
                 </svg>
-                <div class="text-sm text-yellow-800">
-                    <strong>Note:</strong> Some sessions show estimated data (marked with ~) as they were recorded before Stop event tracking was enabled. 
-                    Only sessions with ✓ show accurate working vs waiting time.
+                <div class="text-sm text-blue-800">
+                    <strong>No Activity Data Available:</strong> This tmux session doesn't have Stop event tracking enabled.
+                    To see activity metrics, configure Stop event hooks in your Claude Code settings.
+                    Without Stop events, we cannot accurately measure working vs waiting time.
                 </div>
             </div>
         </div>
         
         <!-- Activity Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <div x-show="hasAccurateData" class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                 <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wider mb-2">Active Time</h3>
                 <p class="text-2xl font-bold text-green-600" x-text="formatDuration(activityStats.active_time_seconds)"></p>
@@ -107,7 +108,7 @@
         </div>
         
         <!-- Activity Timeline Summary -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div x-show="hasAccurateData && sessionsList.length > 0" class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
             <div class="p-4 border-b border-gray-200">
                 <h2 class="text-lg font-bold text-gray-800">Session Activity Overview</h2>
                 <p class="text-sm text-gray-600">Activity patterns for each Claude session</p>
@@ -155,7 +156,7 @@
         </div>
         
         <!-- Activity Distribution Charts -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div x-show="hasAccurateData" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <!-- Pie Chart for Time Distribution -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div class="p-4 border-b border-gray-200">
@@ -419,7 +420,7 @@
                     this.gapChart = new Chart(ctx, {
                         type: 'bar',
                         data: {
-                            labels: ['Active (≤5s)', 'Idle (5-30s)', 'Short Wait (30s-5m)', 'Medium Wait (5-30m)', 'Long Wait (>30m)'],
+                            labels: ['Active (≤2s)', 'Idle (2-5s)', 'Short Wait (5-60s)', 'Medium Wait (1-5m)', 'Long Wait (>5m)'],
                             datasets: [{
                                 label: 'Count',
                                 data: [
