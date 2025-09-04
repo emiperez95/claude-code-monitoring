@@ -16,6 +16,7 @@
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     
     <style>
         .logo-hover {
@@ -338,63 +339,73 @@
                         this.timelineChart.destroy();
                     }
                     
-                    // Prepare data for timeline
-                    const datasets = [];
+                    // If no timeline data, show a message
+                    if (!this.timeline || this.timeline.length === 0) {
+                        ctx.getContext('2d').font = '14px sans-serif';
+                        ctx.getContext('2d').fillStyle = '#9ca3af';
+                        ctx.getContext('2d').textAlign = 'center';
+                        ctx.getContext('2d').fillText('No timeline data available', ctx.width / 2, ctx.height / 2);
+                        return;
+                    }
                     
-                    this.sessionsList.forEach((session, index) => {
+                    // Prepare data for timeline - simplified approach
+                    const activeData = [];
+                    const waitingData = [];
+                    
+                    this.sessionsList.forEach((session, sessionIndex) => {
                         // Find events for this session
                         const sessionEvents = this.timeline.filter(e => e.session_id === session.session_id);
                         
-                        const activeSegments = [];
-                        const waitingSegments = [];
-                        
-                        sessionEvents.forEach((event, i) => {
+                        sessionEvents.forEach(event => {
                             if (event.next_timestamp) {
-                                const startTime = new Date(event.timestamp).getTime();
-                                const endTime = new Date(event.next_timestamp).getTime();
+                                const startTime = new Date(event.timestamp);
+                                const endTime = new Date(event.next_timestamp);
+                                const duration = (endTime - startTime) / 1000; // in seconds
                                 
-                                const segment = {
+                                // Create a data point for this segment
+                                const dataPoint = {
                                     x: [startTime, endTime],
-                                    y: index
+                                    y: sessionIndex,
+                                    sessionId: session.session_id.substring(0, 8),
+                                    duration: duration
                                 };
                                 
                                 if (event.activity_state === 'active' || event.activity_state === 'idle') {
-                                    activeSegments.push(segment);
-                                } else {
-                                    waitingSegments.push(segment);
+                                    activeData.push(dataPoint);
+                                } else if (event.activity_state === 'waiting') {
+                                    waitingData.push(dataPoint);
                                 }
                             }
                         });
-                        
-                        // Add active segments
-                        if (activeSegments.length > 0) {
-                            datasets.push({
-                                label: 'Active',
-                                data: activeSegments,
-                                backgroundColor: '#10b981',
-                                borderColor: '#10b981',
-                                borderWidth: 0,
-                                barThickness: 15
-                            });
-                        }
-                        
-                        // Add waiting segments
-                        if (waitingSegments.length > 0) {
-                            datasets.push({
-                                label: 'Waiting',
-                                data: waitingSegments,
-                                backgroundColor: '#f59e0b',
-                                borderColor: '#f59e0b',
-                                borderWidth: 0,
-                                barThickness: 15
-                            });
-                        }
                     });
                     
-                    // Create timeline chart
+                    // Create timeline chart with consolidated datasets
                     this.timelineChart = new Chart(ctx, {
                         type: 'bar',
-                        data: { datasets },
+                        data: {
+                            datasets: [
+                                {
+                                    label: 'Active',
+                                    data: activeData,
+                                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                                    borderColor: 'rgba(16, 185, 129, 1)',
+                                    borderWidth: 1,
+                                    barThickness: 12,
+                                    categoryPercentage: 0.8,
+                                    barPercentage: 0.9
+                                },
+                                {
+                                    label: 'Waiting',
+                                    data: waitingData,
+                                    backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                                    borderColor: 'rgba(245, 158, 11, 1)',
+                                    borderWidth: 1,
+                                    barThickness: 12,
+                                    categoryPercentage: 0.8,
+                                    barPercentage: 0.9
+                                }
+                            ]
+                        },
                         options: {
                             indexAxis: 'y',
                             responsive: true,
@@ -404,9 +415,11 @@
                                     type: 'time',
                                     time: {
                                         displayFormats: {
-                                            hour: 'HH:mm',
-                                            minute: 'HH:mm'
-                                        }
+                                            hour: 'MMM d, HH:mm',
+                                            minute: 'HH:mm',
+                                            second: 'HH:mm:ss'
+                                        },
+                                        tooltipFormat: 'MMM dd, yyyy HH:mm:ss'
                                     },
                                     title: {
                                         display: true,
@@ -414,15 +427,21 @@
                                     }
                                 },
                                 y: {
+                                    type: 'linear',
                                     title: {
                                         display: true,
                                         text: 'Sessions'
                                     },
+                                    min: -0.5,
+                                    max: Math.max(this.sessionsList.length - 0.5, 0.5),
                                     ticks: {
-                                        callback: (value, index) => {
-                                            return this.sessionsList[index] 
-                                                ? this.sessionsList[index].session_id.substring(0, 8) 
-                                                : '';
+                                        stepSize: 1,
+                                        callback: (value) => {
+                                            const index = Math.floor(value);
+                                            if (index >= 0 && index < this.sessionsList.length) {
+                                                return this.sessionsList[index].session_id.substring(0, 8);
+                                            }
+                                            return '';
                                         }
                                     }
                                 }
@@ -434,9 +453,23 @@
                                 },
                                 tooltip: {
                                     callbacks: {
+                                        title: (context) => {
+                                            if (context[0]) {
+                                                const item = context[0].raw;
+                                                return `Session: ${item.sessionId}`;
+                                            }
+                                            return '';
+                                        },
                                         label: (context) => {
-                                            const duration = (context.raw.x[1] - context.raw.x[0]) / 1000;
-                                            return `${context.dataset.label}: ${this.formatDuration(duration)}`;
+                                            const item = context.raw;
+                                            const startTime = new Date(item.x[0]).toLocaleTimeString();
+                                            const endTime = new Date(item.x[1]).toLocaleTimeString();
+                                            return [
+                                                `${context.dataset.label}`,
+                                                `Start: ${startTime}`,
+                                                `End: ${endTime}`,
+                                                `Duration: ${this.formatDuration(item.duration)}`
+                                            ];
                                         }
                                     }
                                 }
